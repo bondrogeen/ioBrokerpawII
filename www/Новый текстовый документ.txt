@@ -1,0 +1,3 @@
+http://IP:8080/set.json?send=brightness&value=30  уровень яркости подсветки от 1-255
+http://IP:8080/set.json?send=brightnessMode&value=auto  режим подсветки (auto или manual)
+
