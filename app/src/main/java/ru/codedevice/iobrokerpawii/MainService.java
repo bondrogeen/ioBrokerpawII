@@ -1,23 +1,30 @@
 package ru.codedevice.iobrokerpawii;
 
 import android.app.ActivityManager;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.provider.Settings;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.view.WindowManager;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.io.File;
@@ -35,7 +42,8 @@ import fi.iki.elonen.NanoHTTPD;
 
 public class MainService extends Service {
 
-    private WebServer androidWebServer;
+    private WebServer webServer;
+    static  Context cont;
     private static boolean isStarted = false;
     private NotificationManager notificationManager;
     public static final int DEFAULT_NOTIFICATION_ID = 101;
@@ -51,9 +59,6 @@ public class MainService extends Service {
     JSONObject volume = new JSONObject();
     JSONObject memory = new JSONObject();
     JSONObject info = new JSONObject();
-
-
-
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -77,8 +82,12 @@ public class MainService extends Service {
                             isStarted = false;
                         }
                     }
+
                     break;
 
+                case "alert":
+                    setAlert(intent);
+                    break;
             }
         }
 
@@ -93,6 +102,8 @@ public class MainService extends Service {
         Log.d(TAG, "onCreate");
         notificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
         checkInstallation();
+
+        cont = this;
     }
 
     @Override
@@ -171,8 +182,8 @@ public class MainService extends Service {
     private boolean startAndroidWebServer() {
         if (!isStarted) {
             try {
-                androidWebServer = new WebServer(port);
-                androidWebServer.start(5000);
+                webServer = new WebServer(port);
+                webServer.start(5000);
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -222,8 +233,8 @@ public class MainService extends Service {
     }
 
     private boolean stopAndroidWebServer() {
-        if (isStarted && androidWebServer != null) {
-            androidWebServer.stop();
+        if (isStarted && webServer != null) {
+            webServer.stop();
             return true;
         }
         return false;
@@ -298,6 +309,23 @@ public class MainService extends Service {
     }
 
 
+    private boolean openURL(String url){
+        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://" + url;
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        return true;
+    }
+
+    private boolean vibrate(int val){
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
+        }else{
+            v.vibrate(500);
+        }
+        return true;
+    }
     private JSONObject getInfoWiFi(){
 
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -366,11 +394,90 @@ public class MainService extends Service {
         return String.valueOf(all);
     }
 
+    private int getTimeOff(){
+        int timeOff = 0;
+        try {
+            timeOff = Settings.System.getInt(getContentResolver(),Settings.System.SCREEN_OFF_TIMEOUT);
+            timeOff = timeOff/1000;
+        } catch (Exception ignored) {
+
+        }
+        return timeOff;
+    }
+
+    private boolean setScreenOff(int time){
+        time = (time!=0) ? time*1000 : -1;
+        try {
+            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_OFF_TIMEOUT,time);
+            return true;
+        } catch (Exception ignored) { }
+        return false;
+    }
+
+    private boolean setHome(){
+        Intent i = new Intent(Intent.ACTION_MAIN);
+        i.addCategory(Intent.CATEGORY_HOME);
+        i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(i);
+        return true;
+    }
+
+
+    private boolean setAlert(Intent i){
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(i.getStringExtra("title")!=null ? i.getStringExtra("title") : "Title");
+        builder.setMessage(i.getStringExtra("alert"));
+        if(i.getStringExtra("cancel")!=null && i.getStringExtra("cancel").equals("true") && (i.getStringExtra("positiveButton")!=null
+                || i.getStringExtra("neutralButton")!=null
+                || i.getStringExtra("negativeButton")!=null)){
+            builder.setCancelable(false);
+        }else{
+            builder.setCancelable(true);
+        }
+
+
+        if(i.getStringExtra("positiveButton")!=null){
+            builder.setPositiveButton(i.getStringExtra("positiveButton"),
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog,
+                                            int id) {
+                            dialog.cancel();
+                        }
+                    });
+        }
+
+        if(i.getStringExtra("neutralButton")!=null){
+            builder.setNeutralButton(i.getStringExtra("neutralButton"),
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog,
+                                            int id) {
+                            dialog.cancel();
+                        }
+                    });
+        }
+
+        if(i.getStringExtra("negativeButton")!=null){
+            builder.setNegativeButton(i.getStringExtra("negativeButton"),
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog,
+                                            int id) {
+                            dialog.cancel();
+                        }
+                    });
+        }
+
+        AlertDialog alertDialog = builder.create();
+        alertDialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+        alertDialog.show();
+
+        return true;
+    }
+
     public class WebServer extends NanoHTTPD {
         String TAG = "WebServer";
-        WebServer(int port) {
-            super(port);
-        }
+        WebServer(int port) {super(port);}
 
         @Override
         public NanoHTTPD.Response serve(NanoHTTPD.IHTTPSession session) {
@@ -379,7 +486,6 @@ public class MainService extends Service {
             Response res;
             String uri = session.getUri();
             String status = ERROR;
-
 
             Log.i(TAG, uri);
             Log.i(TAG, String.valueOf(parms));
@@ -390,12 +496,34 @@ public class MainService extends Service {
                 return newFixedLengthResponse(Response.Status.OK, "application/json; charset=UTF-8", getInfo());
             }else if(uri.equals("/set.json")){
                 Log.i(TAG, "SET");
-                if((parms.get("send") != null)){
-                    if(parms.get("send").equals("brightness") && parms.get("value") != null && isNumber(parms.get("value"))){
-                        status = setBrightness(Integer.parseInt(parms.get("value"))) ? OK : ERROR;
+                Log.i(TAG, String.valueOf(parms.size()));
+                if(parms.size()>=1){
+                    if(parms.get("brightness") != null && isNumber(parms.get("brightness"))){
+                        status = setBrightness(Integer.parseInt(parms.get("brightness"))) ? OK : ERROR;
                     }
-                    if(parms.get("send").equals("brightnessMode") && parms.get("value") != null ){
-                        status = setBrightnessMode(parms.get("value")) ? OK : ERROR;
+                    if(parms.get("brightnessMode")!=null){
+                        status = setBrightnessMode(parms.get("brightnessMode")) ? OK : ERROR;
+                    }
+                    if(parms.get("link") != null ){
+                        status = openURL(parms.get("link")) ? OK : ERROR;
+                    }
+                    if(parms.get("vibrate") != null && isNumber(parms.get("vibrate"))){
+                        status = vibrate(Integer.parseInt(parms.get("vibrate"))) ? OK : ERROR;
+                    }
+                    if(parms.get("screenOff") != null && isNumber(parms.get("screenOff"))){
+                        status = setScreenOff(Integer.parseInt(parms.get("screenOff"))) ? OK : ERROR;
+                    }
+                    if(parms.get("home") != null){
+                        status = setHome() ? OK : ERROR;
+                    }
+                    if(parms.get("alert") != null){
+                        status = OK;
+                        Intent i = new Intent(getApplicationContext(),MainService.class);
+                        for (String key : parms.keySet()) {
+                            i.putExtra(key,parms.get(key));
+                        }
+                        i.putExtra("init","alert");
+                        startService(i);
                     }
                 }
                 return newFixedLengthResponse(Response.Status.OK, "application/json; charset=UTF-8", status);
