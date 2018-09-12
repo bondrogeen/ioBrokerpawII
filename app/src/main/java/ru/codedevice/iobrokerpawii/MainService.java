@@ -1,14 +1,18 @@
 package ru.codedevice.iobrokerpawii;
 
+import android.Manifest;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -21,12 +25,17 @@ import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.Settings;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
+import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.WindowManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -34,23 +43,34 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import fi.iki.elonen.NanoHTTPD;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class MainService extends Service {
 
     private WebServer webServer;
-    static  Context cont;
-    private static boolean isStarted = false;
+    private TextToSpeech tts;
     private NotificationManager notificationManager;
-    public static final int DEFAULT_NOTIFICATION_ID = 101;
-    private static final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
+    PowerManager.WakeLock wl = null;
+    OkHttpClient client = new OkHttpClient();
 
-    private final String OK = "{status:OK}";
-    private final String ERROR = "{status:ERROR}";
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+    public static final int DEFAULT_NOTIFICATION_ID = 101;
+    private static boolean isStarted = false;
+    private static final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
+    private boolean TTS_OK = false;
+    public static final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
+    public static final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
 
     int port = 8080;
     String TAG = "MainService";
@@ -59,6 +79,8 @@ public class MainService extends Service {
     JSONObject volume = new JSONObject();
     JSONObject memory = new JSONObject();
     JSONObject info = new JSONObject();
+
+    private int notificationID = 1;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -77,21 +99,26 @@ public class MainService extends Service {
                     if (isConnectedInWifi()) {
                         if (!isStarted && startAndroidWebServer()) {
                             isStarted = true;
-                            sendNotification("Ticker","Title","Text");
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                                nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "App Service", NotificationManager.IMPORTANCE_DEFAULT));
+                                nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_INFO, "Download Info", NotificationManager.IMPORTANCE_DEFAULT));
+
+                                sendNotification("Ticker", "Title", "Text",NOTIFICATION_CHANNEL_ID_SERVICE);
+                            } else {
+                                sendNotification("Ticker", "Title", "Text","");
+                            }
                         } else if (stopAndroidWebServer()) {
                             isStarted = false;
                         }
                     }
-
                     break;
-
                 case "alert":
                     setAlert(intent);
                     break;
             }
         }
 
-        //return super.onStartCommand(intent, flags, startId);
         //return Service.START_STICKY;
         return START_REDELIVER_INTENT;
     }
@@ -102,8 +129,8 @@ public class MainService extends Service {
         Log.d(TAG, "onCreate");
         notificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
         checkInstallation();
+        initTTS();
 
-        cont = this;
     }
 
     @Override
@@ -117,12 +144,37 @@ public class MainService extends Service {
         stopSelf();
     }
 
+    public void sendNotification(String Ticker, String Title, String Text, String canelId) {
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.setAction(Intent.ACTION_MAIN);
+        notificationIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+        PendingIntent contentIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this,canelId);
+        builder.setContentIntent(contentIntent)
+                .setOngoing(true)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setTicker("Start")
+                .setContentTitle("ioBroker.paw 2")
+                .setContentText(getIpAccess())
+                .setWhen(System.currentTimeMillis());
+
+        Notification notification;
+        if (android.os.Build.VERSION.SDK_INT <= 15) {
+            notification = builder.getNotification(); // API-15 and lower
+        } else {
+            notification = builder.build();
+        }
+        startForeground(DEFAULT_NOTIFICATION_ID, notification);
+    }
+
     private void checkInstallation() {
         if (!new File(INSTALL_DIR).exists()) {
             new File(INSTALL_DIR).mkdirs();
             HashMap<String, Integer> keepFiles = new HashMap<>();
             try {
-                extractZip(getAssets().open("content.zip"),INSTALL_DIR, keepFiles);
+                extractZip(getAssets().open("content.zip"), INSTALL_DIR, keepFiles);
             } catch (IOException e) {
                 Log.e(TAG, e.getMessage());
             }
@@ -140,8 +192,8 @@ public class MainService extends Service {
             zipinputstream = new ZipInputStream(zipIs);
             ZipEntry zipentry = zipinputstream.getNextEntry();
 
-            while(true) {
-                while(zipentry != null) {
+            while (true) {
+                while (zipentry != null) {
                     String entryName = dest + zipentry.getName();
                     entryName = entryName.replace('/', File.separatorChar);
                     entryName = entryName.replace('\\', File.separatorChar);
@@ -160,7 +212,7 @@ public class MainService extends Service {
                         FileOutputStream fileoutputstream = new FileOutputStream(entryName);
 
                         int n;
-                        while((n = zipinputstream.read(buf, 0, 8192)) > -1) {
+                        while ((n = zipinputstream.read(buf, 0, 8192)) > -1) {
                             fileoutputstream.write(buf, 0, n);
                         }
 
@@ -177,6 +229,28 @@ public class MainService extends Service {
             Log.e(TAG, var11.getMessage());
         }
 
+    }
+
+    private void initTTS() {
+        TTS_OK = false;
+        tts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                Locale def_local = Locale.getDefault();
+                if (def_local!=null && status == TextToSpeech.SUCCESS) {
+                    int result = tts.setLanguage(def_local);
+                    if (result == TextToSpeech.LANG_MISSING_DATA
+                            || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        Log.e("TTS", "This Language is not supported");
+                    } else {
+                        TTS_OK = true;
+                        Log.i("TTS", "This Language is supported");
+                    }
+                } else {
+                    Log.e("TTS", "Initilization Failed!");
+                }
+            }
+        });
     }
 
     private boolean startAndroidWebServer() {
@@ -207,31 +281,6 @@ public class MainService extends Service {
                 && wifiManager.isWifiEnabled() && networkInfo.getTypeName().equals("WIFI");
     }
 
-    public void sendNotification(String Ticker,String Title,String Text) {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        notificationIntent.setAction(Intent.ACTION_MAIN);
-        notificationIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-
-        PendingIntent contentIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
-        builder.setContentIntent(contentIntent)
-                .setOngoing(true)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setTicker("Start")
-                .setContentTitle("ioBroker.paw 2")
-                .setContentText(getIpAccess())
-                .setWhen(System.currentTimeMillis());
-
-        Notification notification;
-        if (android.os.Build.VERSION.SDK_INT<=15) {
-            notification = builder.getNotification(); // API-15 and lower
-        }else{
-            notification = builder.build();
-        }
-        startForeground(DEFAULT_NOTIFICATION_ID, notification);
-    }
-
     private boolean stopAndroidWebServer() {
         if (isStarted && webServer != null) {
             webServer.stop();
@@ -240,48 +289,68 @@ public class MainService extends Service {
         return false;
     }
 
-    private int getBrightness(){
+    private int getBrightness() {
         int brightness = 0;
         try {
             brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
-            brightness = (int) Math.round(brightness/2.55);
+            brightness = (int) Math.round(brightness / 2.55);
         } catch (Exception ignored) {
 
         }
         return brightness;
     }
 
-
-    private String getDisplay(){
+    private String getDisplay() {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         String display;
         assert pm != null;
-        if(pm.isScreenOn()){
-            display="true";
-        }else{
-            display="false";
+        if (pm.isScreenOn()) {
+            display = "true";
+        } else {
+            display = "false";
         }
         return display;
     }
 
-    private String getBrightnessMode(){
+    private boolean setNotSleep(String s){
+        Log.i("setNotSleep : ", String.valueOf(s));
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (s.equals("true") && wl == null && pm != null) {
+            wl = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    TAG);
+            wl.acquire();
+            return true;
+        }else if (s.equals("false") && wl != null){
+            wl.release();
+            wl=null;
+            return true;
+        }
+        return false;
+    }
+
+    private String getBrightnessMode() {
         String mode = "";
         try {
-            mode = Settings.System.getInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS_MODE) == 1 ? "auto" : "manual";
+            mode = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE) == 1 ? "auto" : "manual";
         } catch (Settings.SettingNotFoundException e) {
             e.printStackTrace();
         }
         return mode;
     }
 
-    private boolean setBrightness(int value){
-        if(value<4){value=4;}
-        if(value>100){value=100;}
-        if (value <=100 && value >=4){
-            int num = (int) Math.round(value*2.55);
+    private boolean setBrightness(int value) {
+        if (value < 4) {
+            value = 4;
+        }
+        if (value > 100) {
+            value = 100;
+        }
+        if (value <= 100) {
+            int num = (int) Math.round(value * 2.55);
             Log.i("Brightness", String.valueOf(num));
-            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS_MODE,Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
-            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS,num );
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, num);
             return true;
         }
         return false;
@@ -295,21 +364,19 @@ public class MainService extends Service {
         return true;
     }
 
-
-    private boolean setBrightnessMode(String str){
-        if (str.equals("auto")){
-            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS_MODE,Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC);
+    private boolean setBrightnessMode(String str) {
+        if (str.equals("auto")) {
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC);
             return true;
         }
-        if (str.equals("manual")){
-            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS_MODE,Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
+        if (str.equals("manual")) {
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
             return true;
         }
         return false;
     }
 
-
-    private boolean openURL(String url){
+    private boolean openURL(String url) {
         if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://" + url;
         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -317,29 +384,31 @@ public class MainService extends Service {
         return true;
     }
 
-    private boolean vibrate(int val){
+    private boolean vibrate(int val) {
         Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            v.vibrate(VibrationEffect.createOneShot(500,VibrationEffect.DEFAULT_AMPLITUDE));
-        }else{
-            v.vibrate(500);
+            v.vibrate(VibrationEffect.createOneShot(val, VibrationEffect.DEFAULT_AMPLITUDE));
+        } else {
+            v.vibrate(val);
         }
         return true;
     }
-    private JSONObject getInfoWiFi(){
 
+    private JSONObject getInfoWiFi() {
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
         WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        if(wifiInfo != null && wifiInfo.getIpAddress() != 0) {
+        if (wifiInfo != null && wifiInfo.getIpAddress() != 0) {
             int ipAddress = wifiManager.getConnectionInfo().getIpAddress();
             String formatedIpAddress = String.format("%d.%d.%d.%d", (ipAddress & 0xff), (ipAddress >> 8 & 0xff), (ipAddress >> 16 & 0xff), (ipAddress >> 24 & 0xff));
             String mac = wifiInfo.getMacAddress();
             String SSID = wifiInfo.getSSID();
-            int  Rssi = wifiInfo.getRssi();
-            if(SSID == null) SSID = "unknown";
+            int Rssi = wifiInfo.getRssi();
+            if (SSID == null) SSID = "unknown";
             String linkspeed = wifiInfo.getLinkSpeed() + " " + WifiInfo.LINK_SPEED_UNITS;
-            if(wifiInfo.getLinkSpeed() < 0) { linkspeed = "unknown"; }
-            String wifiStrengthPercent = (100 + wifiInfo.getRssi() + 20)+"%";
+            if (wifiInfo.getLinkSpeed() < 0) {
+                linkspeed = "unknown";
+            }
+            String wifiStrengthPercent = (100 + wifiInfo.getRssi() + 20) + "%";
             try {
                 wifi.put("ssid", SSID);
                 wifi.put("strengthpercent", wifiStrengthPercent);
@@ -353,18 +422,19 @@ public class MainService extends Service {
         }
         return wifi;
     }
-    private String getInfo(){
+
+    private String getInfo() {
         try {
             info.put("brand", Build.BRAND);
             info.put("model", Build.MODEL);
             info.put("time", Build.TIME);
             info.put("sdk", Build.VERSION.SDK);
-            info.put("brightness",getBrightness());
-            info.put("lcd",getDisplay());
-            info.put("brightnessMode",getBrightnessMode());
+            info.put("brightness", getBrightness());
+            info.put("lcd", getDisplay());
+            info.put("brightnessMode", getBrightnessMode());
+            info.put("timeScreen", getTimeScreenOff());
 
-
-            AudioManager audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+            AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
             assert audio != null;
             volume.put("ring", audio.getStreamVolume(AudioManager.STREAM_RING));
             volume.put("music", audio.getStreamVolume(AudioManager.STREAM_MUSIC));
@@ -374,19 +444,18 @@ public class MainService extends Service {
             volume.put("voice_call", audio.getStreamVolume(AudioManager.STREAM_VOICE_CALL));
 
             ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
-            ActivityManager activityManager = (ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+            ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             assert activityManager != null;
             activityManager.getMemoryInfo(memoryInfo);
-            memory.put("free_RAM",memoryInfo.availMem/ 1024 /1024);
+            memory.put("free_RAM", memoryInfo.availMem / 1024 / 1024);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                memory.put("total_RAM",memoryInfo.totalMem/ 1024 /1024);
+                memory.put("total_RAM", memoryInfo.totalMem / 1024 / 1024);
             }
 
-
-            all.put("info",info);
-            all.put("memory",memory);
-            all.put("wifi",getInfoWiFi());
-            all.put("audio_volume",volume);
+            all.put("info", info);
+            all.put("memory", memory);
+            all.put("wifi", getInfoWiFi());
+            all.put("audio_volume", volume);
 
         } catch (JSONException e) {
             e.printStackTrace();
@@ -394,27 +463,28 @@ public class MainService extends Service {
         return String.valueOf(all);
     }
 
-    private int getTimeOff(){
+    private int getTimeScreenOff() {
         int timeOff = 0;
         try {
-            timeOff = Settings.System.getInt(getContentResolver(),Settings.System.SCREEN_OFF_TIMEOUT);
-            timeOff = timeOff/1000;
+            timeOff = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT);
+            timeOff = timeOff / 1000;
         } catch (Exception ignored) {
 
         }
         return timeOff;
     }
 
-    private boolean setScreenOff(int time){
-        time = (time!=0) ? time*1000 : -1;
+    private boolean setTimeScreenOff(int time) {
+        time = (time != 0) ? time * 1000 : -1;
         try {
-            Settings.System.putInt(getContentResolver(),Settings.System.SCREEN_OFF_TIMEOUT,time);
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, time);
             return true;
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {
+        }
         return false;
     }
 
-    private boolean setHome(){
+    private boolean setHome() {
         Intent i = new Intent(Intent.ACTION_MAIN);
         i.addCategory(Intent.CATEGORY_HOME);
         i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -423,22 +493,20 @@ public class MainService extends Service {
         return true;
     }
 
-
-    private boolean setAlert(Intent i){
-
+    private boolean setAlert(Intent i) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(i.getStringExtra("title")!=null ? i.getStringExtra("title") : "Title");
+        builder.setTitle(i.getStringExtra("title") != null ? i.getStringExtra("title") : "Title");
         builder.setMessage(i.getStringExtra("alert"));
-        if(i.getStringExtra("cancel")!=null && i.getStringExtra("cancel").equals("true") && (i.getStringExtra("positiveButton")!=null
-                || i.getStringExtra("neutralButton")!=null
-                || i.getStringExtra("negativeButton")!=null)){
+
+        if (i.getStringExtra("cancel") != null && i.getStringExtra("cancel").equals("true") && (i.getStringExtra("positiveButton") != null
+                || i.getStringExtra("neutralButton") != null
+                || i.getStringExtra("negativeButton") != null)) {
             builder.setCancelable(false);
-        }else{
+        } else {
             builder.setCancelable(true);
         }
 
-
-        if(i.getStringExtra("positiveButton")!=null){
+        if (i.getStringExtra("positiveButton") != null) {
             builder.setPositiveButton(i.getStringExtra("positiveButton"),
                     new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog,
@@ -448,7 +516,7 @@ public class MainService extends Service {
                     });
         }
 
-        if(i.getStringExtra("neutralButton")!=null){
+        if (i.getStringExtra("neutralButton") != null) {
             builder.setNeutralButton(i.getStringExtra("neutralButton"),
                     new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog,
@@ -458,7 +526,7 @@ public class MainService extends Service {
                     });
         }
 
-        if(i.getStringExtra("negativeButton")!=null){
+        if (i.getStringExtra("negativeButton") != null) {
             builder.setNegativeButton(i.getStringExtra("negativeButton"),
                     new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog,
@@ -475,8 +543,149 @@ public class MainService extends Service {
         return true;
     }
 
+    private boolean setNoti(Map<String, String> str) {
+        notificationID = (str.get("id") != null && isNumber(str.get("id"))) ? Integer.parseInt(str.get("id")) : notificationID++;
+        Intent resultIntent = new Intent(this, MainActivity.class);
+        PendingIntent resultPendingIntent = PendingIntent.getActivity(this, 0, resultIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT);
+
+        NotificationCompat.Builder builder =
+                new NotificationCompat.Builder(this)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle(str.get("title") != null ? str.get("title") : "Title")
+                        .setContentText(str.get("newNoti"))
+                        .setShowWhen(true)
+                        .setContentIntent(resultPendingIntent);
+
+
+        if (str.get("contentInfo") != null) {
+            builder.setContentInfo(str.get("contentInfo"));
+        }
+        if (str.get("vibrate") != null && str.get("vibrate").equals("true")) {
+            builder.setVibrate(new long[]{1000, 1000});
+        }
+        if (str.get("sound") != null && str.get("sound").equals("true")) {
+            builder.setSound(Settings.System.DEFAULT_NOTIFICATION_URI);
+        }
+        if (str.get("light") != null && str.get("light").equals("true")) {
+            builder.setLights(Color.RED, 3000, 3000);
+        }
+        if (str.get("progress") != null && isNumber(str.get("progress"))) {
+            builder.setProgress(100, Integer.parseInt(str.get("progress")), false);
+        }
+
+        Notification notification = builder.build();
+        notificationManager.notify(notificationID, notification);
+        return true;
+    }
+
+    private boolean delNoti() {
+        notificationManager.cancelAll();
+        return true;
+    }
+
+    private boolean delNoti(int id) {
+        notificationManager.cancel(id);
+        return true;
+    }
+
+    private boolean setVolume(int val, String type) {
+        AudioManager audioMgr = (AudioManager) getSystemService(AUDIO_SERVICE);
+        int volumeType;
+
+        switch (type) {
+            case "ring":
+                volumeType = AudioManager.STREAM_RING;
+                break;
+            case "music":
+                volumeType = AudioManager.STREAM_MUSIC;
+                break;
+            case "notification":
+                volumeType = AudioManager.STREAM_NOTIFICATION;
+                break;
+            case "alarm":
+                volumeType = AudioManager.STREAM_ALARM;
+                break;
+            case "system":
+                volumeType = AudioManager.STREAM_SYSTEM;
+                break;
+            case "voice":
+                volumeType = AudioManager.STREAM_VOICE_CALL;
+                break;
+            default:
+                return false;
+        }
+
+        if (val < 0) {
+            val = 0;
+        }
+        int max = audioMgr.getStreamMaxVolume(volumeType);
+        if (val > max) {
+            val = max;
+        }
+        audioMgr.setStreamVolume(volumeType, val, 0);
+        return true;
+    }
+
+    private boolean setCall(String num) {
+        Intent i = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + num));
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }else{
+            startActivity(i);
+        }
+        return true;
+    }
+
+    private boolean speakOut(String text) {
+        if (TTS_OK){
+//            setTtsUtteranceProgressListener();
+            HashMap<String, String> map = new HashMap<>();
+            map.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID,"messageID");
+            tts.speak(text, TextToSpeech.QUEUE_ADD, map);
+            return true;
+        }
+        return false;
+    }
+
+    private void setTtsUtteranceProgressListener() {
+        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override
+            public void onStart(String utteranceId) {
+                Log.i(TAG, "TTS onStart");
+            }
+            @Override
+            public void onDone(String utteranceId) {
+                Log.i(TAG, "TTS onDone");
+            }
+            @Override
+            public void onError(String utteranceId) {
+                Log.e(TAG, "TTS onError");
+            }
+        });
+    }
+
+    private boolean setMessage(String num,String text){
+        SmsManager.getDefault().sendTextMessage(num, null, text, null, null);
+        return true;
+    }
+
+    String post(String url, String json) throws IOException {
+        RequestBody body = RequestBody.create(JSON, json);
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+        Response response = client.newCall(request).execute();
+        return response.body().string();
+    }
+
     public class WebServer extends NanoHTTPD {
         String TAG = "WebServer";
+        private final String OK = "{status:OK}";
+        private final String ERROR = "{status:ERROR}";
+
         WebServer(int port) {super(port);}
 
         @Override
@@ -510,11 +719,20 @@ public class MainService extends Service {
                     if(parms.get("vibrate") != null && isNumber(parms.get("vibrate"))){
                         status = vibrate(Integer.parseInt(parms.get("vibrate"))) ? OK : ERROR;
                     }
-                    if(parms.get("screenOff") != null && isNumber(parms.get("screenOff"))){
-                        status = setScreenOff(Integer.parseInt(parms.get("screenOff"))) ? OK : ERROR;
+                    if(parms.get("timeScreenOff") != null && isNumber(parms.get("screenOff"))){
+                        status = setTimeScreenOff(Integer.parseInt(parms.get("screenOff"))) ? OK : ERROR;
                     }
                     if(parms.get("home") != null){
                         status = setHome() ? OK : ERROR;
+                    }
+                    if(parms.get("wakeUp") != null){
+                        status = setNotSleep(parms.get("sleep")) ? OK : ERROR;
+                    }
+                    if(parms.get("tts") != null){
+                        status = speakOut(parms.get("tts")) ? OK : ERROR;
+                    }
+                    if(parms.get("volume") != null && isNumber(parms.get("volume"))){
+                        status = setVolume(Integer.parseInt(parms.get("volume")), parms.get("type") != null ? parms.get("type") : "music") ? OK : ERROR;
                     }
                     if(parms.get("alert") != null){
                         status = OK;
@@ -524,6 +742,23 @@ public class MainService extends Service {
                         }
                         i.putExtra("init","alert");
                         startService(i);
+                    }
+                    if(parms.get("newNoti") != null){
+                        status = setNoti(parms) ? OK : ERROR;
+                    }
+                    if(parms.get("call") != null){
+                        status = setCall(parms.get("call")) ? OK : ERROR;
+                    }
+                    if(parms.get("sms") != null && parms.get("text") != null){
+                        status = setMessage(parms.get("sms"),parms.get("text")) ? OK : ERROR;
+                    }
+                    if(parms.get("delNoti") != null){
+                        if(isNumber(parms.get("delNoti"))) {
+                            status = delNoti(Integer.parseInt(parms.get("delNoti"))) ? OK : ERROR;
+                        }
+                        if(parms.get("delNoti").equals("all")){
+                            status = delNoti() ? OK : ERROR;
+                        }
                     }
                 }
                 return newFixedLengthResponse(Response.Status.OK, "application/json; charset=UTF-8", status);
@@ -550,7 +785,6 @@ public class MainService extends Service {
                 }
                 return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_HTML, "<h1>Page not found</h1>");
             }
-
         }
     }
 }
