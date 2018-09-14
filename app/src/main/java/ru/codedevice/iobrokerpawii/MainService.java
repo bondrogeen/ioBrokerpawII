@@ -8,9 +8,12 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.AudioManager;
@@ -19,12 +22,15 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.provider.Telephony;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.support.v4.app.ActivityCompat;
@@ -42,6 +48,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -62,23 +69,24 @@ public class MainService extends Service {
     private NotificationManager notificationManager;
     PowerManager.WakeLock wl = null;
     OkHttpClient client = new OkHttpClient();
+    BroadcastReceiver br;
+    SharedPreferences settings;
 
-    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
-    public static final int DEFAULT_NOTIFICATION_ID = 101;
+    private static final int DEFAULT_NOTIFICATION_ID = 101;
     private static boolean isStarted = false;
     private static final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
     private boolean TTS_OK = false;
-    public static final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
-    public static final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
+    private static final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
+    private static final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
 
-    int port = 8080;
-    String TAG = "MainService";
-    JSONObject all = new JSONObject();
-    JSONObject wifi = new JSONObject();
-    JSONObject volume = new JSONObject();
-    JSONObject memory = new JSONObject();
-    JSONObject info = new JSONObject();
+    private String TAG = "MainService";
+    private JSONObject all = new JSONObject();
+    private JSONObject wifi = new JSONObject();
+    private JSONObject volume = new JSONObject();
+    private JSONObject memory = new JSONObject();
+    private JSONObject info = new JSONObject();
 
     private int notificationID = 1;
 
@@ -95,26 +103,18 @@ public class MainService extends Service {
             String status = intent.getStringExtra("init");
             Log.d(TAG, "init :" + status);
             switch (status) {
-                case "start":
+                case "startWebServer":
                     if (isConnectedInWifi()) {
-                        if (!isStarted && startAndroidWebServer()) {
-                            isStarted = true;
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                                nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "App Service", NotificationManager.IMPORTANCE_DEFAULT));
-                                nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_INFO, "Download Info", NotificationManager.IMPORTANCE_DEFAULT));
-
-                                sendNotification("Ticker", "Title", "Text",NOTIFICATION_CHANNEL_ID_SERVICE);
-                            } else {
-                                sendNotification("Ticker", "Title", "Text","");
-                            }
-                        } else if (stopAndroidWebServer()) {
-                            isStarted = false;
-                        }
+                        startAndroidWebServer();
                     }
                     break;
                 case "alert":
                     setAlert(intent);
+                    break;
+                case "wifi":
+                    if(isConnectedInWifi()){
+//                        startAndroidWebServer();
+                    }
                     break;
             }
         }
@@ -129,6 +129,7 @@ public class MainService extends Service {
         Log.d(TAG, "onCreate");
         notificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
         checkInstallation();
+        initBroadReceiver();
         initTTS();
 
     }
@@ -138,26 +139,72 @@ public class MainService extends Service {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
         stopAndroidWebServer();
-        isStarted = false;
-
-        notificationManager.cancel(DEFAULT_NOTIFICATION_ID);
+        if(br != null){
+            unregisterReceiver(br);
+            br = null;
+        }
         stopSelf();
     }
 
-    public void sendNotification(String Ticker, String Title, String Text, String canelId) {
+    public void initBroadReceiver() {
+        settings = PreferenceManager.getDefaultSharedPreferences(this);
+        IntentFilter filter = new IntentFilter();
+
+        if(settings.getBoolean("event_wifi", false)){
+            filter.addAction("android.net.wifi.STATE_CHANGE");
+//        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        }
+
+
+        if(settings.getBoolean("event_call", false)){
+            filter.addAction("android.intent.action.PHONE_STATE");
+        }
+
+        if(settings.getBoolean("event_call", false)){
+            filter.addAction("android.intent.action.PHONE_STATE");
+        }
+
+        if(settings.getBoolean("event_sms", false)){
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                filter.addAction(Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION);
+            }
+        }
+
+        if(settings.getBoolean("event_battery", false)){
+            filter.addAction("android.intent.action.BATTERY_LOW");
+            filter.addAction(Intent.ACTION_POWER_CONNECTED);
+            filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+            filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        }
+
+        br = new MainReceiver();
+        registerReceiver(br, filter);
+    }
+
+    public void sendNotification(String Ticker, String Title, String Text) {
+        String chanelId;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "MainService", NotificationManager.IMPORTANCE_DEFAULT));
+            nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_INFO, "Download Info", NotificationManager.IMPORTANCE_DEFAULT));
+            chanelId = NOTIFICATION_CHANNEL_ID_SERVICE;
+        } else {
+            chanelId = "";
+        }
+
         Intent notificationIntent = new Intent(this, MainActivity.class);
         notificationIntent.setAction(Intent.ACTION_MAIN);
         notificationIntent.addCategory(Intent.CATEGORY_LAUNCHER);
 
         PendingIntent contentIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this,canelId);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this,chanelId);
         builder.setContentIntent(contentIntent)
                 .setOngoing(true)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setTicker("Start")
-                .setContentTitle("ioBroker.paw 2")
-                .setContentText(getIpAccess())
+                .setTicker(Ticker)
+                .setContentTitle(Title)
+                .setContentText(Text)
                 .setWhen(System.currentTimeMillis());
 
         Notification notification;
@@ -186,7 +233,6 @@ public class MainService extends Service {
             if (!dest.endsWith("/")) {
                 dest = dest + "/";
             }
-
             byte[] buf = new byte[8192];
             ZipInputStream zipinputstream;
             zipinputstream = new ZipInputStream(zipIs);
@@ -208,27 +254,22 @@ public class MainService extends Service {
                         if (!(new File(newFile.getParent())).exists()) {
                             (new File(newFile.getParent())).mkdirs();
                         }
-
                         FileOutputStream fileoutputstream = new FileOutputStream(entryName);
-
                         int n;
                         while ((n = zipinputstream.read(buf, 0, 8192)) > -1) {
                             fileoutputstream.write(buf, 0, n);
                         }
-
                         fileoutputstream.close();
                         zipinputstream.closeEntry();
                         zipentry = zipinputstream.getNextEntry();
                     }
                 }
-
                 zipinputstream.close();
                 break;
             }
         } catch (Exception var11) {
             Log.e(TAG, var11.getMessage());
         }
-
     }
 
     private void initTTS() {
@@ -256,8 +297,11 @@ public class MainService extends Service {
     private boolean startAndroidWebServer() {
         if (!isStarted) {
             try {
+                int port = 8080;
                 webServer = new WebServer(port);
                 webServer.start(5000);
+                sendNotification("Start", "Web Server", getIpAccess());
+                isStarted = true;
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -270,7 +314,7 @@ public class MainService extends Service {
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
         int ipAddress = wifiManager.getConnectionInfo().getIpAddress();
         final String formatedIpAddress = String.format("%d.%d.%d.%d", (ipAddress & 0xff), (ipAddress >> 8 & 0xff), (ipAddress >> 16 & 0xff), (ipAddress >> 24 & 0xff));
-        return "http://" + formatedIpAddress + ":";
+        return "http://" + formatedIpAddress + ":8080";
     }
 
     public boolean isConnectedInWifi() {
@@ -284,6 +328,8 @@ public class MainService extends Service {
     private boolean stopAndroidWebServer() {
         if (isStarted && webServer != null) {
             webServer.stop();
+            notificationManager.cancel(DEFAULT_NOTIFICATION_ID);
+            isStarted = false;
             return true;
         }
         return false;
@@ -681,11 +727,46 @@ public class MainService extends Service {
         return response.body().string();
     }
 
+    public boolean disconnectCall(){
+        try {
+            String serviceManagerName = "android.os.ServiceManager";
+            String serviceManagerNativeName = "android.os.ServiceManagerNative";
+            String telephonyName = "com.android.internal.telephony.ITelephony";
+            Class<?> telephonyClass;
+            Class<?> telephonyStubClass;
+            Class<?> serviceManagerClass;
+            Class<?> serviceManagerNativeClass;
+            Method telephonyEndCall;
+            Object telephonyObject;
+            Object serviceManagerObject;
+            telephonyClass = Class.forName(telephonyName);
+            telephonyStubClass = telephonyClass.getClasses()[0];
+            serviceManagerClass = Class.forName(serviceManagerName);
+            serviceManagerNativeClass = Class.forName(serviceManagerNativeName);
+            Method getService = serviceManagerClass.getMethod("getService", String.class);
+            Method tempInterfaceMethod = serviceManagerNativeClass.getMethod("asInterface", IBinder.class);
+            Binder tmpBinder = new Binder();
+            tmpBinder.attachInterface(null, "fake");
+            serviceManagerObject = tempInterfaceMethod.invoke(null, tmpBinder);
+            IBinder retbinder = (IBinder) getService.invoke(serviceManagerObject, "phone");
+            Method serviceMethod = telephonyStubClass.getMethod("asInterface", IBinder.class);
+            telephonyObject = serviceMethod.invoke(null, retbinder);
+            telephonyEndCall = telephonyClass.getMethod("endCall");
+            telephonyEndCall.invoke(telephonyObject);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.e(TAG,"FATAL ERROR: could not connect to telephony subsystem");
+            Log.e(TAG, "Exception object: " + e);
+            return false;
+        }
+    }
+
+
     public class WebServer extends NanoHTTPD {
         String TAG = "WebServer";
         private final String OK = "{status:OK}";
         private final String ERROR = "{status:ERROR}";
-
         WebServer(int port) {super(port);}
 
         @Override
@@ -700,10 +781,10 @@ public class MainService extends Service {
             Log.i(TAG, String.valueOf(parms));
             Log.i(TAG, String.valueOf(header));
 
-            if(uri.equals("/get.json")){
+            if(uri.equals("/api/get.json")){
                 Log.i(TAG, "GET");
                 return newFixedLengthResponse(Response.Status.OK, "application/json; charset=UTF-8", getInfo());
-            }else if(uri.equals("/set.json")){
+            }else if(uri.equals("/api/set.json")){
                 Log.i(TAG, "SET");
                 Log.i(TAG, String.valueOf(parms.size()));
                 if(parms.size()>=1){
@@ -748,6 +829,9 @@ public class MainService extends Service {
                     }
                     if(parms.get("call") != null){
                         status = setCall(parms.get("call")) ? OK : ERROR;
+                    }
+                    if(parms.get("callEnd") != null){
+                        status = disconnectCall() ? OK : ERROR;
                     }
                     if(parms.get("sms") != null && parms.get("text") != null){
                         status = setMessage(parms.get("sms"),parms.get("text")) ? OK : ERROR;

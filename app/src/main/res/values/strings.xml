@@ -13,10 +13,10 @@
     <!-- Example General settings -->
     <string name="pref_header_general">General</string>
 
-    <string name="pref_title_social_recommendations">Enable social recommendations</string>
-    <string name="pref_description_social_recommendations">Recommendations for people to contact
-        based on your message history
-    </string>
+    <string name="pref_title_auto_start">Autostart</string>
+    <string name="pref_description_auto_start">Run the application when the device starts up</string>
+    <string name="pref_title_social_recommendations">Autostart</string>
+    <string name="pref_description_social_recommendations">Run the application when the device starts up</string>
 
     <string name="pref_title_display_name">Display name</string>
     <string name="pref_default_display_name">John Smith</string>
@@ -66,17 +66,58 @@
         <item>3</item>
     </string-array>
 
+
+
+    <string-array name="list_preference_battery">
+        <item>60 %</item>
+        <item>70 %</item>
+        <item>80 %</item>
+        <item>85 %</item>
+        <item>90 %</item>
+        <item>95 %</item>
+        <item>100 %</item>
+    </string-array>
+
+    <string-array name="list_preference_battery_values">
+        <item>60</item>
+        <item>70</item>
+        <item>80</item>
+        <item>85</item>
+        <item>90</item>
+        <item>95</item>
+        <item>100</item>
+    </string-array>
+
+
+    <string-array name="list_preference_location_time_entries">
+        <item>1 m</item>
+        <item>5 m</item>
+        <item>10 m</item>
+        <item>30 m</item>
+        <item>1 h</item>
+        <item>6 h</item>
+    </string-array>
+
+    <string-array name="list_preference_location_time_values">
+        <item>60</item>
+        <item>300</item>
+        <item>600</item>
+        <item>1800</item>
+        <item>21600</item>
+        <item>43200</item>
+    </string-array>
+
+
+
+
+
+
     <string-array name="multi_select_list_preference_default_value" />
-
     <string name="pref_title_system_sync_settings">System sync settings</string>
-
-    <!-- Example settings for Notifications -->
     <string name="pref_header_notifications">Notifications</string>
-
     <string name="pref_title_new_message_notifications">New message notifications</string>
-
     <string name="pref_title_ringtone">Ringtone</string>
     <string name="pref_ringtone_silent">Silent</string>
-
     <string name="pref_title_vibrate">Vibrate</string>
+
 </resources>

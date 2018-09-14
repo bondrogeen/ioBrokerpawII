@@ -35,10 +35,10 @@ public class MainActivity extends AppCompatActivity
         intentService = new Intent(this,MainService.class);
 
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        final FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        final FloatingActionButton fab = findViewById(R.id.fab);
         if (!isMyServiceRunning(MainService.class)) {
             fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
             fab.setImageResource(R.drawable.ic_play_arrow_black_24dp);
@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity
 
                 if(isConnectedInWifi()){
                     if (!isMyServiceRunning(MainService.class)) {
-                        intentService.putExtra("init","start");
+                        intentService.putExtra("init","startWebServer");
                         startService(intentService);
                         fab.setBackgroundTintList(ColorStateList.valueOf(Color.GREEN));
                         fab.setImageResource(R.drawable.ic_pause_black_24dp);
@@ -74,19 +74,19 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawer.addDrawerListener(toggle);
         toggle.syncState();
 
-        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
     }
 
     @Override
     public void onBackPressed() {
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
         } else {
@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity
 
         }
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }

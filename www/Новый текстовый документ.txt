@@ -12,6 +12,7 @@ http://IP:8080/set.json?delNoti=all - удалить все уведомлени
 http://IP:8080/set.json?delNoti=2 - удалить одно уведомление с id равным 2
 
 http://IP:8080/set.json?call=1111  Позвонить на номер
+http://IP:8080/set.json?callEnd=true  Завершить разговор
 http://IP:8080/set.json?sms=1111&text=Test  Отправить смс
 
 http://IP:8080/set.json?volume=12 установить уровень громкости 

@@ -17,4 +17,9 @@
         android:icon="@drawable/ic_sync_black_24dp"
         android:title="@string/pref_header_data_sync" />
 
+    <header
+        android:fragment="ru.codedevice.iobrokerpawii.SettingsActivity$EventPreferenceFragment"
+        android:icon="@drawable/ic_hearing_black_24dp"
+        android:title="Events" />
+
 </preference-headers>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_wifi"
+        android:summary="Send SSID when connected"
+        android:title="WiFi" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_display"
+        android:summary="Display ON|OFF"
+        android:title="Display" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_sensors"
+        android:summary="Send information from built-in sensors"
+        android:title="Sensors" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_battery"
+        android:summary=""
+        android:title="Battery" />
+
+    <ListPreference
+        android:defaultValue="100"
+        android:entries="@array/list_preference_entries"
+        android:entryValues="@array/list_preference_entry_values"
+        android:key="list_general_full_battery"
+        android:negativeButtonText="@null"
+        android:positiveButtonText="@null"
+        android:summary="Set charge completion level"
+        android:dependency="event_battery"
+        android:title="Full battery" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_call"
+        android:summary="Send information about an incoming call"
+        android:title="Call" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_sms"
+        android:summary="Send information about an incoming message"
+        android:title="Message" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_key"
+        android:summary="Send change hardware buttons"
+        android:title="Key" />
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="event_gps"
+        android:summary="Send locations"
+        android:title="Location" />
+    <ListPreference
+        android:defaultValue="300"
+        android:entries="@array/list_preference_location_time_entries"
+        android:entryValues="@array/list_preference_location_time_values"
+        android:key="event_gps_time"
+        android:negativeButtonText="@null"
+        android:positiveButtonText="@null"
+        android:summary="Data sending period"
+        android:dependency="event_gps"
+        android:title="Interval" />
+
+</PreferenceScreen>
