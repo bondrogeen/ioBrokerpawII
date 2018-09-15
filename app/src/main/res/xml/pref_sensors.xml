@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="sensors_wifi"
+        android:summary="@string/event_wifi_summary"
+        android:title="WiFi" />
+
+    <PreferenceScreen
+        android:title="title"
+        android:summary="hghghgh"
+        android:dependency="sensors_wifi">
+        <intent android:action="android.intent.action.VIEW"
+            android:data="http://www.android.com" />
+
+    </PreferenceScreen>
+
+</PreferenceScreen>

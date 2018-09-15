@@ -52,6 +52,7 @@ public class MainReceiver extends BroadcastReceiver {
         if (action.equals("android.intent.action.SCREEN_ON")
                 ||action.equals("android.intent.action.SCREEN_OFF")){
             i.putExtra("init","screen");
+            i.putExtra("state",action.equals("android.intent.action.SCREEN_ON") ? "true" : "false");
             context.startService(i);
         }
 

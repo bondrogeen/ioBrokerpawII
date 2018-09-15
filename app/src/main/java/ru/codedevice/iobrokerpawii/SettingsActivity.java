@@ -4,19 +4,25 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
+import android.preference.PreferenceScreen;
+import android.preference.SwitchPreference;
 import android.support.v7.app.ActionBar;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.preference.RingtonePreference;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.MenuItem;
 
 import java.util.List;
@@ -38,6 +44,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
      * A preference value change listener that updates the preference's summary
      * to reflect its new value.
      */
+
     private static Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = new Preference.OnPreferenceChangeListener() {
         @Override
         public boolean onPreferenceChange(Preference preference, Object value) {
@@ -132,6 +139,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
                 || GeneralPreferenceFragment.class.getName().equals(fragmentName)
                 || DataSyncPreferenceFragment.class.getName().equals(fragmentName)
                 || EventPreferenceFragment.class.getName().equals(fragmentName)
+                || SensorsPreferenceFragment.class.getName().equals(fragmentName)
                 || NotificationPreferenceFragment.class.getName().equals(fragmentName);
     }
 
@@ -210,6 +218,94 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             addPreferencesFromResource(R.xml.pref_event);
             setHasOptionsMenu(true);
 
+        }
+
+        @Override
+        public boolean onOptionsItemSelected(MenuItem item) {
+            int id = item.getItemId();
+            if (id == android.R.id.home) {
+                getActivity().onBackPressed();
+                return true;
+            }
+            return super.onOptionsItemSelected(item);
+        }
+
+    }
+
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    public static class SensorsPreferenceFragment extends PreferenceFragment implements Preference.OnPreferenceClickListener {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+//            addPreferencesFromResource(R.xml.pref_sensors);
+            setHasOptionsMenu(true);
+
+            Boolean isFind;
+            PreferenceScreen rootScreen = getPreferenceManager().createPreferenceScreen(getActivity());
+            setPreferenceScreen(rootScreen);
+
+            SensorManager sensorManager = (SensorManager) getActivity().getSystemService(Context.SENSOR_SERVICE);
+            List<Sensor> listSensor = sensorManager.getSensorList(Sensor.TYPE_ALL);
+
+            for (int i = 0; i < listSensor.size(); i++) {
+                Log.i("TAG", String.valueOf(listSensor.get(i).getName()));
+                Log.i("TAG", String.valueOf(listSensor.get(i).getType()));
+                Log.i("TAG", String.valueOf(listSensor.get(i).getVersion()));
+
+
+                isFind = false;
+                SwitchPreference newElem = new SwitchPreference(getActivity());
+
+                switch (listSensor.get(i).getType()) {
+                    case Sensor.TYPE_ACCELEROMETER:
+                        isFind = true;
+                        newElem.setKey("sensors_accelerometer");
+                        newElem.setTitle("Accelerometer");
+                        break;
+                    case 3:
+                        isFind = true;
+                        newElem.setKey("sensors_orientation");
+                        newElem.setTitle("Orientation");
+                        break;
+                    case Sensor.TYPE_LIGHT:
+                        isFind = true;
+                        newElem.setKey("sensors_light");
+                        newElem.setTitle("Light");
+                        break;
+                    case Sensor.TYPE_PROXIMITY:
+                        isFind = true;
+                        newElem.setKey("sensors_proximity");
+                        newElem.setTitle("Proximity");
+                        break;
+                    case Sensor.TYPE_PRESSURE:
+                        isFind = true;
+                        newElem.setKey("sensors_pressure");
+                        newElem.setTitle("Pressure");
+                        break;
+                    case Sensor.TYPE_GYROSCOPE:
+                        isFind = true;
+                        newElem.setKey("sensors_gyroscope");
+                        newElem.setTitle("Gyroscope");
+                        break;
+
+                    case Sensor.TYPE_AMBIENT_TEMPERATURE:
+                        isFind = true;
+                        newElem.setKey("sensors_temperature");
+                        newElem.setTitle("Temperature");
+                        break;
+                    case Sensor.TYPE_RELATIVE_HUMIDITY:
+                        isFind = true;
+                        newElem.setKey("sensors_humidity");
+                        newElem.setTitle("Humidity");
+                        break;
+                }
+                if(isFind){
+                    newElem.setSummary(listSensor.get(i).getName());
+                    rootScreen.addPreference(newElem);
+                }
+            }
+//            findPreference("sensors_wifi").setOnPreferenceClickListener(this);
+
 
         }
 
@@ -221,6 +317,13 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
                 return true;
             }
             return super.onOptionsItemSelected(item);
+        }
+
+        @Override
+        public boolean onPreferenceClick(Preference preference) {
+
+            Log.i("TAG","rrrrrrrr");
+            return true;
         }
     }
 

@@ -16,6 +16,8 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -50,12 +52,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import fi.iki.elonen.NanoHTTPD;
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -67,19 +72,16 @@ public class MainService extends Service {
     private WebServer webServer;
     private TextToSpeech tts;
     private NotificationManager notificationManager;
-    PowerManager.WakeLock wl = null;
-    OkHttpClient client = new OkHttpClient();
-    BroadcastReceiver br;
-    SharedPreferences settings;
+    private PowerManager.WakeLock wl = null;
+    private BroadcastReceiver br;
+    private SharedPreferences settings;
 
-    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-
-    private static final int DEFAULT_NOTIFICATION_ID = 101;
-    private static boolean isStarted = false;
-    private static final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
+    private final int DEFAULT_NOTIFICATION_ID = 101;
+    private boolean isStarted = false;
+    private final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
     private boolean TTS_OK = false;
-    private static final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
-    private static final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
+    private final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
+    private final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
 
     private String TAG = "MainService";
     private JSONObject all = new JSONObject();
@@ -87,6 +89,10 @@ public class MainService extends Service {
     private JSONObject volume = new JSONObject();
     private JSONObject memory = new JSONObject();
     private JSONObject info = new JSONObject();
+    private JSONObject tempJSON = new JSONObject();
+
+    private String serverIP = "192.168.1.83";
+    private String serverPort = "8898";
 
     private int notificationID = 1;
 
@@ -116,6 +122,14 @@ public class MainService extends Service {
 //                        startAndroidWebServer();
                     }
                     break;
+                case "screen":
+                    String str = intent.getStringExtra("state");
+                    if(str != null){
+                        post("/","{\"screen\":\""+str+"\"}");
+//                        post("/",getInfo());
+                    }
+
+                    break;
             }
         }
 
@@ -126,18 +140,21 @@ public class MainService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate");
         notificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
+        initSettings();
         checkInstallation();
         initBroadReceiver();
         initTTS();
 
     }
 
+    private void initSettings() {
+        settings = PreferenceManager.getDefaultSharedPreferences(this);
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy");
         stopAndroidWebServer();
         if(br != null){
             unregisterReceiver(br);
@@ -147,7 +164,7 @@ public class MainService extends Service {
     }
 
     public void initBroadReceiver() {
-        settings = PreferenceManager.getDefaultSharedPreferences(this);
+
         IntentFilter filter = new IntentFilter();
 
         if(settings.getBoolean("event_wifi", false)){
@@ -158,6 +175,11 @@ public class MainService extends Service {
 
         if(settings.getBoolean("event_call", false)){
             filter.addAction("android.intent.action.PHONE_STATE");
+        }
+
+        if(settings.getBoolean("event_display", false)){
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
         }
 
         if(settings.getBoolean("event_call", false)){
@@ -686,10 +708,18 @@ public class MainService extends Service {
 
     private boolean speakOut(String text) {
         if (TTS_OK){
-//            setTtsUtteranceProgressListener();
+            setTtsUtteranceProgressListener();
             HashMap<String, String> map = new HashMap<>();
             map.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID,"messageID");
             tts.speak(text, TextToSpeech.QUEUE_ADD, map);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean speakStop() {
+        if (TTS_OK) {
+            tts.stop();
             return true;
         }
         return false;
@@ -700,14 +730,17 @@ public class MainService extends Service {
             @Override
             public void onStart(String utteranceId) {
                 Log.i(TAG, "TTS onStart");
+                post("/","tts","start");
             }
             @Override
             public void onDone(String utteranceId) {
                 Log.i(TAG, "TTS onDone");
+                post("/","tts","done");
             }
             @Override
             public void onError(String utteranceId) {
                 Log.e(TAG, "TTS onError");
+                post("/","tts","error");
             }
         });
     }
@@ -715,16 +748,6 @@ public class MainService extends Service {
     private boolean setMessage(String num,String text){
         SmsManager.getDefault().sendTextMessage(num, null, text, null, null);
         return true;
-    }
-
-    String post(String url, String json) throws IOException {
-        RequestBody body = RequestBody.create(JSON, json);
-        Request request = new Request.Builder()
-                .url(url)
-                .post(body)
-                .build();
-        Response response = client.newCall(request).execute();
-        return response.body().string();
     }
 
     public boolean disconnectCall(){
@@ -760,6 +783,47 @@ public class MainService extends Service {
             Log.e(TAG, "Exception object: " + e);
             return false;
         }
+    }
+
+    private boolean post(String url, JSONObject str){
+        return post(url,str.toString());
+    }
+
+    private boolean post(String url, String key , String value){
+        return post(url, "{\"" + key + "\":\"" + value + "\"}");
+    }
+
+    private boolean post(String url, String json){
+        if(isStarted) {
+            String link = "http://" + serverIP + ":" + serverPort + url;
+            Log.i(TAG, link);
+            Log.i(TAG, json);
+            MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+            OkHttpClient client = new OkHttpClient();
+            RequestBody body = RequestBody.create(JSON, json);
+            Request request = new Request.Builder()
+                    .url(link)
+                    .post(body)
+                    .build();
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                }
+
+                @Override
+                public void onResponse(Call call, final Response response) throws IOException {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Unexpected code " + response);
+                    } else {
+                        Log.i(TAG, response.body().string());
+                    }
+                }
+            });
+            return true;
+        }
+        return false;
     }
 
 
@@ -806,11 +870,18 @@ public class MainService extends Service {
                     if(parms.get("home") != null){
                         status = setHome() ? OK : ERROR;
                     }
+                    if(parms.get("test") != null){
+                        status = post("http://192.168.1.83:8898/","{}") ? OK : ERROR;
+//                        status = post("http://192.168.1.56/","{}") ? OK : ERROR;
+                    }
                     if(parms.get("wakeUp") != null){
                         status = setNotSleep(parms.get("sleep")) ? OK : ERROR;
                     }
                     if(parms.get("tts") != null){
                         status = speakOut(parms.get("tts")) ? OK : ERROR;
+                    }
+                    if(parms.get("ttsStop") != null){
+                        status = speakStop() ? OK : ERROR;
                     }
                     if(parms.get("volume") != null && isNumber(parms.get("volume"))){
                         status = setVolume(Integer.parseInt(parms.get("volume")), parms.get("type") != null ? parms.get("type") : "music") ? OK : ERROR;
