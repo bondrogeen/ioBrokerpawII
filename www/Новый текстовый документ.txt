@@ -17,7 +17,8 @@ http://IP:8080/set.json?sms=1111&text=Test  Отправить смс
 
 http://IP:8080/set.json?volume=12 установить уровень громкости 
 
-http://IP:8080/set.json?tts=Test TextToSpeech tts;
+http://IP:8080/set.json?tts=Test Отправить текст на синтез речи
+http://IP:8080/set.json?ttsStop=true остановить синтез речи
 
 
 

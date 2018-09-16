@@ -82,6 +82,12 @@ public class MainActivity extends AppCompatActivity
 
         NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
+
+        Intent intent = new Intent(this, SensorActivity.class);
+        intent.putExtra("sensorType", 5);
+//        startActivity(intent);
+
+
     }
 
     @Override

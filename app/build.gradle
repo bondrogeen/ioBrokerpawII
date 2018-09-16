@@ -4,7 +4,7 @@ android {
     compileSdkVersion 28
     defaultConfig {
         applicationId "ru.codedevice.iobrokerpawii"
-        minSdkVersion 15
+        minSdkVersion 16
         targetSdkVersion 28
         versionCode 1
         versionName "1.0"
@@ -36,8 +36,9 @@ dependencies {
     implementation 'com.mxn.soul:flowingdrawer-core:2.0.0'
     implementation 'com.nineoldandroids:library:2.4.0'
     implementation 'com.squareup.okhttp3:okhttp:3.11.0'
-    implementation 'com.github.danimahardhika.candybar-library:core:3.5.0-b4'
     implementation('com.h6ah4i.android.widget.advrecyclerview:advrecyclerview:0.11.0@aar') {
         transitive = true
     }
+    implementation 'com.afollestad.material-dialogs:core:2.0.0-alpha10'
+    implementation 'com.jjoe64:graphview:4.2.2'
 }

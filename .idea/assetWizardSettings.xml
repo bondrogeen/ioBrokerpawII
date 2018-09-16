@@ -18,7 +18,7 @@
                                 <PersistentState>
                                   <option name="values">
                                     <map>
-                                      <entry key="url" value="jar:file:/C:/Program%20Files/Android/Android%20Studio/plugins/android/lib/android.jar!/images/material_design_icons/hardware/ic_memory_black_24dp.xml" />
+                                      <entry key="url" value="jar:file:/C:/Program%20Files/Android/Android%20Studio/plugins/android/lib/android.jar!/images/material_design_icons/hardware/ic_cast_connected_black_24dp.xml" />
                                     </map>
                                   </option>
                                 </PersistentState>
@@ -28,8 +28,8 @@
                         </option>
                         <option name="values">
                           <map>
-                            <entry key="color" value="fff7ff" />
-                            <entry key="outputName" value="ic_memory_black_24dp" />
+                            <entry key="color" value="5b61ff" />
+                            <entry key="outputName" value="ic_cast_connected_black_24dp" />
                             <entry key="sourceFile" value="C:\Users\Roman" />
                           </map>
                         </option>

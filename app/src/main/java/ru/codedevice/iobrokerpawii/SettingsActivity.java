@@ -3,6 +3,7 @@ package ru.codedevice.iobrokerpawii;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
@@ -12,9 +13,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
+import android.preference.DialogPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
+import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
 import android.preference.SwitchPreference;
 import android.support.v7.app.ActionBar;
@@ -137,10 +140,9 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
     protected boolean isValidFragment(String fragmentName) {
         return PreferenceFragment.class.getName().equals(fragmentName)
                 || GeneralPreferenceFragment.class.getName().equals(fragmentName)
-                || DataSyncPreferenceFragment.class.getName().equals(fragmentName)
                 || EventPreferenceFragment.class.getName().equals(fragmentName)
-                || SensorsPreferenceFragment.class.getName().equals(fragmentName)
-                || NotificationPreferenceFragment.class.getName().equals(fragmentName);
+                || ConnectionPreferenceFragment.class.getName().equals(fragmentName)
+                || SensorsPreferenceFragment.class.getName().equals(fragmentName);
     }
 
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
@@ -153,50 +155,10 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
 
             bindPreferenceSummaryToValue(findPreference("example_text"));
             bindPreferenceSummaryToValue(findPreference("example_list"));
-        }
-
-        @Override
-        public boolean onOptionsItemSelected(MenuItem item) {
-            int id = item.getItemId();
-            if (id == android.R.id.home) {
-                getActivity().onBackPressed();
-                return true;
-            }
-            return super.onOptionsItemSelected(item);
-        }
-    }
-
-    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
-    public static class NotificationPreferenceFragment extends PreferenceFragment {
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            addPreferencesFromResource(R.xml.pref_notification);
-            setHasOptionsMenu(true);
-
-            bindPreferenceSummaryToValue(findPreference("notifications_new_message_ringtone"));
-        }
-
-        @Override
-        public boolean onOptionsItemSelected(MenuItem item) {
-            int id = item.getItemId();
-            if (id == android.R.id.home) {
-                getActivity().onBackPressed();
-                return true;
-            }
-            return super.onOptionsItemSelected(item);
-        }
-    }
-
-    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
-    public static class DataSyncPreferenceFragment extends PreferenceFragment {
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            addPreferencesFromResource(R.xml.pref_data_sync);
-            setHasOptionsMenu(true);
-
             bindPreferenceSummaryToValue(findPreference("sync_frequency"));
+            bindPreferenceSummaryToValue(findPreference("general_notifications_ringtone"));
+            bindPreferenceSummaryToValue(findPreference("general_notifications_time_on"));
+            bindPreferenceSummaryToValue(findPreference("general_notifications_time_off"));
         }
 
         @Override
@@ -209,6 +171,65 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             return super.onOptionsItemSelected(item);
         }
     }
+
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    public static class ConnectionPreferenceFragment extends PreferenceFragment {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+//            addPreferencesFromResource(R.xml.pref_connections);
+            setHasOptionsMenu(true);
+
+            PreferenceScreen rootScreen = getPreferenceManager().createPreferenceScreen(getActivity());
+            setPreferenceScreen(rootScreen);
+
+
+            SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String storedPreference = pref.getString("connection_list","0");
+
+            Log.i("SettingsActivity", storedPreference);
+
+            CharSequence[] entries = { "Web server", "MQTT"};
+            CharSequence[] entryValues = { "0", "1"};
+            ListPreference lp = new ListPreference(getActivity());
+            lp.setEntries(entries);
+            lp.setEntryValues(entryValues);
+            lp.setDefaultValue("0");
+            lp.setTitle("Connection");
+//            lp.setSummary(lp.getEntry());
+            lp.setDialogTitle("Select connection type");
+            lp.setKey("connection_list");
+            rootScreen.addPreference(lp);
+
+            bindPreferenceSummaryToValue(findPreference("connection_list"));
+
+
+            if(storedPreference.equals("0")){
+                rootScreen.addPreference(newEliment(getActivity(),"web_server_ip", "IP", "ip"));
+            }else{
+
+            }
+        }
+
+        @Override
+        public boolean onOptionsItemSelected(MenuItem item) {
+            int id = item.getItemId();
+            if (id == android.R.id.home) {
+                getActivity().onBackPressed();
+                return true;
+            }
+            return super.onOptionsItemSelected(item);
+        }
+
+        private SwitchPreference newEliment(Context cont, String key, String title, String summary){
+            SwitchPreference newElem = new SwitchPreference(cont);
+            newElem.setKey(key);
+            newElem.setTitle(title);
+            newElem.setSummary(summary);
+            return  newElem;
+        }
+    }
+
 
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
     public static class EventPreferenceFragment extends PreferenceFragment {
@@ -237,14 +258,13 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
-//            addPreferencesFromResource(R.xml.pref_sensors);
             setHasOptionsMenu(true);
 
-            Boolean isFind;
             PreferenceScreen rootScreen = getPreferenceManager().createPreferenceScreen(getActivity());
             setPreferenceScreen(rootScreen);
 
             SensorManager sensorManager = (SensorManager) getActivity().getSystemService(Context.SENSOR_SERVICE);
+            assert sensorManager != null;
             List<Sensor> listSensor = sensorManager.getSensorList(Sensor.TYPE_ALL);
 
             for (int i = 0; i < listSensor.size(); i++) {
@@ -252,58 +272,104 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
                 Log.i("TAG", String.valueOf(listSensor.get(i).getType()));
                 Log.i("TAG", String.valueOf(listSensor.get(i).getVersion()));
 
-
-                isFind = false;
                 SwitchPreference newElem = new SwitchPreference(getActivity());
+                PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(getActivity());
+                Intent intent = new Intent(getActivity(),SensorActivity.class);
 
                 switch (listSensor.get(i).getType()) {
                     case Sensor.TYPE_ACCELEROMETER:
-                        isFind = true;
                         newElem.setKey("sensors_accelerometer");
                         newElem.setTitle("Accelerometer");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Accelerometer setup");
+                        screen.setDependency("sensors_accelerometer");
+//                        screen.setSummary("Description of screen");
+                        intent.putExtra("sensorType", Sensor.TYPE_ACCELEROMETER);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case 3:
-                        isFind = true;
                         newElem.setKey("sensors_orientation");
                         newElem.setTitle("Orientation");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Orientation setup");
+                        screen.setDependency("sensors_orientation");
+                        intent.putExtra("sensorType", 3);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case Sensor.TYPE_LIGHT:
-                        isFind = true;
                         newElem.setKey("sensors_light");
                         newElem.setTitle("Light");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Light setup");
+                        screen.setDependency("sensors_light");
+                        intent.putExtra("sensorType", Sensor.TYPE_LIGHT);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case Sensor.TYPE_PROXIMITY:
-                        isFind = true;
                         newElem.setKey("sensors_proximity");
                         newElem.setTitle("Proximity");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Proximity setup");
+                        screen.setDependency("sensors_proximity");
+                        intent.putExtra("sensorType", Sensor.TYPE_PROXIMITY);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case Sensor.TYPE_PRESSURE:
-                        isFind = true;
                         newElem.setKey("sensors_pressure");
                         newElem.setTitle("Pressure");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Pressure setup");
+                        screen.setDependency("sensors_pressure");
+                        intent.putExtra("sensorType", Sensor.TYPE_PRESSURE);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case Sensor.TYPE_GYROSCOPE:
-                        isFind = true;
                         newElem.setKey("sensors_gyroscope");
                         newElem.setTitle("Gyroscope");
                         break;
 
                     case Sensor.TYPE_AMBIENT_TEMPERATURE:
-                        isFind = true;
                         newElem.setKey("sensors_temperature");
                         newElem.setTitle("Temperature");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Temperature setup");
+                        screen.setDependency("sensors_temperature");
+                        intent.putExtra("sensorType", Sensor.TYPE_AMBIENT_TEMPERATURE);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                     case Sensor.TYPE_RELATIVE_HUMIDITY:
-                        isFind = true;
                         newElem.setKey("sensors_humidity");
                         newElem.setTitle("Humidity");
+                        newElem.setSummary(listSensor.get(i).getName());
+                        rootScreen.addPreference(newElem);
+
+                        screen.setTitle("Humidity setup");
+                        screen.setDependency("sensors_humidity");
+                        intent.putExtra("sensorType", Sensor.TYPE_RELATIVE_HUMIDITY);
+                        screen.setIntent(intent);
+                        rootScreen.addPreference(screen);
                         break;
                 }
-                if(isFind){
-                    newElem.setSummary(listSensor.get(i).getName());
-                    rootScreen.addPreference(newElem);
-                }
             }
+
 //            findPreference("sensors_wifi").setOnPreferenceClickListener(this);
 
 
