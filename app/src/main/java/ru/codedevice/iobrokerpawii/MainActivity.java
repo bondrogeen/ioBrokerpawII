@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity
 
                 if(isConnectedInWifi()){
                     if (!isMyServiceRunning(MainService.class)) {
-                        intentService.putExtra("init","startWebServer");
+                        intentService.putExtra("init","start");
                         startService(intentService);
                         fab.setBackgroundTintList(ColorStateList.valueOf(Color.GREEN));
                         fab.setImageResource(R.drawable.ic_pause_black_24dp);
@@ -66,7 +66,6 @@ public class MainActivity extends AppCompatActivity
                 }else{
                     Snackbar mSnackbar = Snackbar.make(view, "No connection to WIFI", Snackbar.LENGTH_LONG)
                             .setAction("Action", null);
-
                     mSnackbar.show();
                 }
 

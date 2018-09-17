@@ -10,16 +10,16 @@
     <header
         android:fragment="ru.codedevice.iobrokerpawii.SettingsActivity$ConnectionPreferenceFragment"
         android:icon="@drawable/ic_cast_connected_black_24dp"
-        android:title="Connection" />
+        android:title="@string/pref_header_connection" />
 
     <header
         android:fragment="ru.codedevice.iobrokerpawii.SettingsActivity$EventPreferenceFragment"
         android:icon="@drawable/ic_hearing_black_24dp"
-        android:title="Events" />
+        android:title="@string/pref_header_event" />
 
     <header
         android:fragment="ru.codedevice.iobrokerpawii.SettingsActivity$SensorsPreferenceFragment"
         android:icon="@drawable/ic_memory_black_24dp"
-        android:title="Sensors" />
+        android:title="@string/pref_header_sensors" />
 
 </preference-headers>

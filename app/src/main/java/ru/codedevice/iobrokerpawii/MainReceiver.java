@@ -27,7 +27,7 @@ public class MainReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         settings = PreferenceManager.getDefaultSharedPreferences(context);
-        general_startNet = settings.getBoolean("general_startNet", false);
+        general_startBoot = settings.getBoolean("general_auto_start", false);
         general_wifi = settings.getBoolean("general_wifi", false);
         general_call = settings.getBoolean("general_call", false);
         general_sms = settings.getBoolean("general_sms", false);
@@ -40,12 +40,13 @@ public class MainReceiver extends BroadcastReceiver {
         if (action == null ){
             return;
         }
+
         i = new Intent(context, MainService.class);
 
-        if (action.equals("android.intent.action.BOOT_COMPLETED")
+        if (general_startBoot && (action.equals("android.intent.action.BOOT_COMPLETED")
                 || action.equals("android.intent.action.QUICKBOOT_POWERON")
-                || action.equals("com.htc.intent.action.QUICKBOOT_POWERON") ){
-            i.putExtra("init","boot");
+                || action.equals("com.htc.intent.action.QUICKBOOT_POWERON"))){
+            i.putExtra("init","start");
             context.startService(i);
         }
 

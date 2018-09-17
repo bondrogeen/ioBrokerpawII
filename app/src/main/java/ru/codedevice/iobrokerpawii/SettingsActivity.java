@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.DialogPreference;
+import android.preference.EditTextPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
@@ -24,9 +25,12 @@ import android.support.v7.app.ActionBar;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.preference.RingtonePreference;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
 import android.view.MenuItem;
+import android.widget.EditText;
 
 import java.util.List;
 
@@ -173,42 +177,13 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
     }
 
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
-    public static class ConnectionPreferenceFragment extends PreferenceFragment {
+    public static class ConnectionPreferenceFragment extends PreferenceFragment implements Preference.OnPreferenceClickListener, Preference.OnPreferenceChangeListener{
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
-//            addPreferencesFromResource(R.xml.pref_connections);
             setHasOptionsMenu(true);
+            newMenu();
 
-            PreferenceScreen rootScreen = getPreferenceManager().createPreferenceScreen(getActivity());
-            setPreferenceScreen(rootScreen);
-
-
-            SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(getActivity());
-            String storedPreference = pref.getString("connection_list","0");
-
-            Log.i("SettingsActivity", storedPreference);
-
-            CharSequence[] entries = { "Web server", "MQTT"};
-            CharSequence[] entryValues = { "0", "1"};
-            ListPreference lp = new ListPreference(getActivity());
-            lp.setEntries(entries);
-            lp.setEntryValues(entryValues);
-            lp.setDefaultValue("0");
-            lp.setTitle("Connection");
-//            lp.setSummary(lp.getEntry());
-            lp.setDialogTitle("Select connection type");
-            lp.setKey("connection_list");
-            rootScreen.addPreference(lp);
-
-            bindPreferenceSummaryToValue(findPreference("connection_list"));
-
-
-            if(storedPreference.equals("0")){
-                rootScreen.addPreference(newEliment(getActivity(),"web_server_ip", "IP", "ip"));
-            }else{
-
-            }
         }
 
         @Override
@@ -221,13 +196,112 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             return super.onOptionsItemSelected(item);
         }
 
-        private SwitchPreference newEliment(Context cont, String key, String title, String summary){
+        private void newMenu(){
+            PreferenceScreen rootScreen = getPreferenceManager().createPreferenceScreen(getActivity());
+            setPreferenceScreen(rootScreen);
+            SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String storedPreference = pref.getString("connection_list","0");
+
+            ListPreference lp = new ListPreference(getActivity());
+            lp.setEntries(new CharSequence[]{"Web server", "MQTT"});
+            lp.setEntryValues(new CharSequence[]{"0","1"});
+            lp.setDefaultValue("0");
+            lp.setTitle("Type connection");
+            lp.setSummary(storedPreference.equals("0") ? "Web server" : "MQTT");
+            lp.setDialogTitle("Select connection type");
+            lp.setKey("connection_list");
+            rootScreen.addPreference(lp);
+
+            findPreference("connection_list").setOnPreferenceChangeListener(this);
+
+//            bindPreferenceSummaryToValue(findPreference("connection_list"));
+
+            if(storedPreference.equals("0")){
+                rootScreen.addPreference(newEditText(getActivity(),"connection_web_server_ip", "Server", pref.getString("connection_web_server_ip","192.168.1.10"),false));
+                findPreference("connection_web_server_ip").setOnPreferenceChangeListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_web_server_port", "Port", pref.getString("connection_web_server_port","8080"),false));
+                findPreference("connection_web_server_port").setOnPreferenceChangeListener(this);
+            }else{
+                rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_ip", "Server", pref.getString("connection_mqtt_ip","mqtt.com"),false));
+                findPreference("connection_mqtt_ip").setOnPreferenceChangeListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_port", "Port", pref.getString("connection_mqtt_port","1883"),false));
+                findPreference("connection_mqtt_port").setOnPreferenceChangeListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_login_port", "Login", pref.getString("connection_login_port","admin"),false));
+                findPreference("connection_login_port").setOnPreferenceChangeListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_pass_port", "Password", pref.getString("connection_pass_port","pass"),true));
+                findPreference("connection_pass_port").setOnPreferenceChangeListener(this);
+                findPreference("connection_pass_port").setOnPreferenceClickListener(this);
+            }
+        }
+
+        private SwitchPreference newSwitch(Context cont, String key, String title, String summary){
             SwitchPreference newElem = new SwitchPreference(cont);
             newElem.setKey(key);
             newElem.setTitle(title);
             newElem.setSummary(summary);
             return  newElem;
         }
+
+        private EditTextPreference newEditText(Context cont, String key, String title, String summary, boolean pass){
+            EditTextPreference newElem = new EditTextPreference(cont);
+            newElem.setKey(key);
+            newElem.setTitle(title);
+            newElem.setDefaultValue(summary);
+            newElem.setDialogTitle("Input");
+            newElem.setSummary(pass ? summary.replaceAll(".","*") : summary);
+            return  newElem;
+        }
+
+        private ListPreference newList(Context cont,String key,String title,String dialogTitle,String devValue,CharSequence[] entries,CharSequence[] entryValues){
+            ListPreference lp = new ListPreference(cont);
+            lp.setEntries(entries);
+            lp.setEntryValues(entryValues);
+            lp.setDefaultValue(devValue);
+            lp.setTitle(title);
+            lp.setSummary(devValue.equals("0") ? "Web server" : "MQTT");
+            lp.setDialogTitle(dialogTitle);
+            lp.setKey(key);
+            return  lp;
+        }
+
+        @Override
+        public boolean onPreferenceClick(Preference preference) {
+            Log.i("TAG","onClick");
+
+            if(preference instanceof EditTextPreference && preference.getKey().equals("connection_pass_port")){
+                EditTextPreference pref=(EditTextPreference)preference;
+                EditText field=pref.getEditText();
+                field.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                field.setTransformationMethod(new PasswordTransformationMethod());
+//                field.requestFocus();
+            }
+
+            return true;
+        }
+
+        @Override
+        public boolean onPreferenceChange(Preference preference, Object o) {
+            String stringValue = o.toString();
+            Log.i("TAG","onChange");
+            Log.i("TAG",preference.getKey());
+            Log.i("TAG", String.valueOf(o.toString()));
+
+            if (preference instanceof ListPreference) {
+                ListPreference listPreference = (ListPreference) preference;
+                int index = listPreference.findIndexOfValue(stringValue);
+                listPreference.setValue(stringValue);
+                Log.i("TAG",listPreference.getValue());
+                preference.setSummary(index >= 0 ? listPreference.getEntries()[index] : null);
+            }else if(preference instanceof EditTextPreference){
+                preference.setSummary(stringValue);
+                ((EditTextPreference) preference).setText(stringValue);
+
+            }
+
+            newMenu();
+            return false;
+        }
+
     }
 
 
@@ -238,7 +312,6 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             super.onCreate(savedInstanceState);
             addPreferencesFromResource(R.xml.pref_event);
             setHasOptionsMenu(true);
-
         }
 
         @Override
@@ -250,7 +323,6 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             }
             return super.onOptionsItemSelected(item);
         }
-
     }
 
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
@@ -285,7 +357,6 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
 
                         screen.setTitle("Accelerometer setup");
                         screen.setDependency("sensors_accelerometer");
-//                        screen.setSummary("Description of screen");
                         intent.putExtra("sensorType", Sensor.TYPE_ACCELEROMETER);
                         screen.setIntent(intent);
                         rootScreen.addPreference(screen);

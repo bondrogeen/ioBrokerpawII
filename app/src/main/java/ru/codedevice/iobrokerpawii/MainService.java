@@ -109,7 +109,7 @@ public class MainService extends Service {
             String status = intent.getStringExtra("init");
             Log.d(TAG, "init :" + status);
             switch (status) {
-                case "startWebServer":
+                case "start":
                     if (isConnectedInWifi()) {
                         startAndroidWebServer();
                     }

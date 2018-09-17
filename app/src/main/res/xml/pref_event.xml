@@ -5,25 +5,25 @@
         android:defaultValue="false"
         android:key="event_wifi"
         android:summary="@string/event_wifi_summary"
-        android:title="WiFi" />
+        android:title="@string/pref_event_wifi_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_display"
         android:summary="Display ON|OFF"
-        android:title="Display" />
+        android:title="@string/pref_event_display_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_sensors"
         android:summary="Send information from built-in sensors"
-        android:title="Sensors" />
+        android:title="@string/pref_event_sensors_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_battery"
         android:summary=""
-        android:title="Battery" />
+        android:title="@string/pref_event_battery_title" />
 
     <ListPreference
         android:defaultValue="100"
@@ -40,25 +40,25 @@
         android:defaultValue="false"
         android:key="event_call"
         android:summary="Send information about an incoming call"
-        android:title="Call" />
+        android:title="@string/pref_event_call_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_sms"
         android:summary="Send information about an incoming message"
-        android:title="Message" />
+        android:title="@string/pref_event_sms_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_key"
         android:summary="Send change hardware buttons"
-        android:title="Key" />
+        android:title="@string/pref_event_key_title" />
 
     <SwitchPreference
         android:defaultValue="false"
         android:key="event_gps"
         android:summary="Send locations"
-        android:title="Location" />
+        android:title="@string/pref_event_gps_title" />
     <ListPreference
         android:defaultValue="300"
         android:entries="@array/list_preference_location_time_entries"

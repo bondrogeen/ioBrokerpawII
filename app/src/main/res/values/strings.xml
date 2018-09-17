@@ -253,5 +253,17 @@
     <string name="permission_rationale">"Contacts permissions are needed for providing email
         completions."
     </string>
+    <string name="pref_header_connection">Connection</string>
+    <string name="pref_header_event">Events</string>
+    <string name="pref_header_sensors">Sensors</string>
+    <string name="pref_connection_list_title">Connection</string>
+    <string name="pref_event_wifi_title">Wi-Fi</string>
+    <string name="pref_event_display_title">Display</string>
+    <string name="pref_event_sensors_title">Sensors</string>
+    <string name="pref_event_battery_title">Battery</string>
+    <string name="pref_event_call_title">Call</string>
+    <string name="pref_event_sms_title">Message</string>
+    <string name="pref_event_key_title">Key</string>
+    <string name="pref_event_gps_title">Location</string>
 
 </resources>
