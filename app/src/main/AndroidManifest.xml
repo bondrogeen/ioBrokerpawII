@@ -46,10 +46,18 @@
             </intent-filter>
         </activity>
 
+
         <service
-            android:name=".MainService"
+            android:name=".WebServerService"
             android:enabled="true"
             android:exported="true" />
+
+        <service
+            android:name=".MQTTService"
+            android:enabled="true"
+            android:exported="true"/>
+
+        <service android:name="org.eclipse.paho.android.service.MqttService" />
 
         <receiver
             android:name=".MainReceiver"
@@ -71,8 +79,8 @@
         <activity
             android:name=".SensorActivity"
             android:label="Sensor"
-            android:theme="@style/AppTheme.NoActionBar"
-            />
+            android:theme="@style/AppTheme.NoActionBar" />
+
     </application>
 
 </manifest>

@@ -29,7 +29,7 @@
         android:defaultValue="100"
         android:entries="@array/list_preference_battery"
         android:entryValues="@array/list_preference_battery_values"
-        android:key="list_general_full_battery"
+        android:key="event_battery_full"
         android:negativeButtonText="@null"
         android:positiveButtonText="@null"
         android:summary="Set charge completion level"

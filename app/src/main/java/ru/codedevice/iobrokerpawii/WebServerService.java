@@ -17,6 +17,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
@@ -40,6 +42,8 @@ import android.support.v4.app.NotificationCompat;
 import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.WindowManager;
+
+import com.jjoe64.graphview.series.DataPoint;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -67,34 +71,45 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class MainService extends Service {
+public class WebServerService extends Service implements SensorEventListener {
 
     private WebServer webServer;
     private TextToSpeech tts;
     private NotificationManager notificationManager;
     private PowerManager.WakeLock wl = null;
-    private BroadcastReceiver br;
+    private BroadcastReceiver broadcastReceiver;
     private SharedPreferences settings;
+    private SensorManager sensorManager;
+    private List<Sensor> sensors;
 
     private final int DEFAULT_NOTIFICATION_ID = 101;
     private boolean isStarted = false;
     private final String INSTALL_DIR = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/ioBroker/paw_2";
     private boolean TTS_OK = false;
-    private final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.MainService";
+    private final String NOTIFICATION_CHANNEL_ID_SERVICE = "ru.codedevice.iobrokerpawii.WebServerService";
     private final String NOTIFICATION_CHANNEL_ID_INFO = "com.package.download_info";
 
-    private String TAG = "MainService";
+    private String TAG = "WebServerService";
     private JSONObject all = new JSONObject();
     private JSONObject wifi = new JSONObject();
     private JSONObject volume = new JSONObject();
     private JSONObject memory = new JSONObject();
     private JSONObject info = new JSONObject();
-    private JSONObject tempJSON = new JSONObject();
+    private JSONObject tempJSON;
 
-    private String serverIP = "192.168.1.83";
-    private String serverPort = "8898";
+    private String serverIP, serverPort, event_battery_full;
 
+    private String accelerometerTempValue, orientationTempValue, lightTempValue, proximityTempValue, pressureTempValue, gyroscopeTempValue, temperatureTempValue, humidityTempValue;
+
+
+    private String number,text,type;
+
+    private boolean batteryOneOk,batteryOneLow = true;
     private int notificationID = 1;
+
+    private String BATTERY_HEALTH[] = {"unknown","unknown","good","overhead","dead","over_voltage","unspecified_failure","cold"};
+
+    Map<String, String> map;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -104,7 +119,7 @@ public class MainService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand");
-
+        map = new HashMap<String, String>();
         if (intent != null && intent.getExtras() != null) {
             String status = intent.getStringExtra("init");
             Log.d(TAG, "init :" + status);
@@ -114,21 +129,79 @@ public class MainService extends Service {
                         startAndroidWebServer();
                     }
                     break;
-                case "alert":
-                    setAlert(intent);
+                case "sms":
+                    map.put("text",intent.getStringExtra("text"));
+                    map.put("number",intent.getStringExtra("number"));
+                    post("/",map);
+                    break;
+                case "call":
+                    type = intent.getStringExtra("type");
+                    number = intent.getStringExtra("number");
+                    try {
+                        if(type.equals("ringing")){
+                            post("/",new JSONObject().put("number",number).put("type",type));
+                        }else{
+                            post("/",new JSONObject().put("type",type));
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                case "batteryInfo":
+                    Log.i(TAG,"batteryInfo_____________________");
+                    int level = intent.getIntExtra("level", -1);
+                    event_battery_full = settings.getString("event_battery_full", "100");
+                    int setting_full_battery = Integer.parseInt(event_battery_full);
+
+                    if (level >= setting_full_battery && batteryOneOk) {
+                        map.put("status", "ok");
+                        batteryOneOk = false;
+                    }
+                    if(level < setting_full_battery) batteryOneOk = true;
+
+                    if (level <= 15 && batteryOneLow) {
+                        map.put("status", "low");
+                        batteryOneLow = false;
+                    }
+                    if(level > 15)batteryOneLow = true;
+
+
+                    map.put("level", String.valueOf(level));
+                    int voltage = intent.getIntExtra("voltage", -1);
+                    map.put("voltage", String.valueOf((float) voltage / 1000));
+                    int plugtype = intent.getIntExtra("plugged", -1);
+                    String type = "";
+                    if (plugtype == 0) {
+                        type = "none";
+                    } else if (plugtype == 1) {
+                        type = "ac";
+                    } else if (plugtype == 2) {
+                        type = "usb";
+                    } else {
+                        type = String.valueOf(plugtype);
+                    }
+                    map.put("type", type);
+                    int health = intent.getIntExtra("health", -1);
+                    map.put("health", String.valueOf(BATTERY_HEALTH[health]));
+                    int temperature = intent.getIntExtra("temperature", -1);
+                    map.put("temperature", String.valueOf((float) temperature / 10));
+                    post("/",map);
                     break;
                 case "wifi":
                     if(isConnectedInWifi()){
 //                        startAndroidWebServer();
                     }
                     break;
+                case "power":
+                    map.put("power",intent.getStringExtra("power"));
+                    post("/",map);
+                    break;
                 case "screen":
-                    String str = intent.getStringExtra("state");
-                    if(str != null){
-                        post("/","{\"screen\":\""+str+"\"}");
-//                        post("/",getInfo());
-                    }
-
+                    map.put("screen",intent.getStringExtra("state"));
+                    post("/",map);
+                    break;
+                case "alert":
+                    setAlert(intent);
                     break;
             }
         }
@@ -141,24 +214,119 @@ public class MainService extends Service {
     public void onCreate() {
         super.onCreate();
         notificationManager = (NotificationManager) this.getSystemService(NOTIFICATION_SERVICE);
+        map = new HashMap<String, String>();
         initSettings();
         checkInstallation();
         initBroadReceiver();
         initTTS();
+        initSensors();
 
     }
 
+    private void initSensors() {
+
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+
+        if(settings.getBoolean("sensors_accelerometer",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_orientation",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(3), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_light",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_proximity",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_pressure",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_gyroscope",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_temperature",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if(settings.getBoolean("sensors_humidity",false)){
+            sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_RELATIVE_HUMIDITY), SensorManager.SENSOR_DELAY_NORMAL);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+//        tvText.setText(String.valueOf(sensorEvent.values[0]));
+
+//        Log.i(TAG, String.valueOf(sensorEvent.sensor.getType()));
+
+        switch (sensorEvent.sensor.getType()) {
+            case Sensor.TYPE_ACCELEROMETER:
+//                name = "Accelerometer";
+//                accelerometerTempValue
+//                sensorValue0.setText("X: " + event.values[0]);
+//                sensorValue1.setText("Y: " + event.values[1]);
+//                sensorValue2.setText("Z: " + event.values[2]);
+                break;
+            case 3:
+//                name = "Orientation";
+//                orientationTempValue
+                break;
+            case Sensor.TYPE_LIGHT:
+//                name = "Light";
+                lightTempValue = String.valueOf(sensorEvent.values[0]);
+                break;
+            case Sensor.TYPE_PROXIMITY:
+//                name = "Proximity";
+                proximityTempValue = String.valueOf(sensorEvent.values[0]);
+                post("/","proximity",proximityTempValue);
+                break;
+            case Sensor.TYPE_PRESSURE:
+//                name = "Pressure";
+                pressureTempValue = String.valueOf(sensorEvent.values[0]);
+                break;
+            case Sensor.TYPE_GYROSCOPE:
+//                name = "Gyroscope";
+//                gyroscopeTempValue
+                break;
+            case Sensor.TYPE_AMBIENT_TEMPERATURE:
+//                name = "Temperature";
+                temperatureTempValue = String.valueOf(sensorEvent.values[0]);
+                break;
+            case Sensor.TYPE_RELATIVE_HUMIDITY:
+//                name = "Humidity";
+                humidityTempValue = String.valueOf(sensorEvent.values[0]);
+                break;
+        }
+
+
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
+
+
     private void initSettings() {
         settings = PreferenceManager.getDefaultSharedPreferences(this);
+        serverIP = settings.getString("connection_web_server_ip", "");
+        serverPort = settings.getString("connection_web_server_port", "");
+        event_battery_full = settings.getString("event_battery_full", "");
+        Log.i(TAG,serverIP);
+        Log.i(TAG,serverPort);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         stopAndroidWebServer();
-        if(br != null){
-            unregisterReceiver(br);
-            br = null;
+        if(broadcastReceiver != null){
+            unregisterReceiver(broadcastReceiver);
+            broadcastReceiver = null;
+        }
+        if(sensorManager != null){
+            sensorManager.unregisterListener(this);
+            sensorManager = null;
         }
         stopSelf();
     }
@@ -172,25 +340,16 @@ public class MainService extends Service {
 //        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
         }
 
-
-        if(settings.getBoolean("event_call", false)){
-            filter.addAction("android.intent.action.PHONE_STATE");
-        }
+        if(settings.getBoolean("event_call", false)) filter.addAction("android.intent.action.PHONE_STATE");
 
         if(settings.getBoolean("event_display", false)){
             filter.addAction(Intent.ACTION_SCREEN_ON);
             filter.addAction(Intent.ACTION_SCREEN_OFF);
         }
 
-        if(settings.getBoolean("event_call", false)){
-            filter.addAction("android.intent.action.PHONE_STATE");
-        }
+        if(settings.getBoolean("event_call", false)) filter.addAction("android.intent.action.PHONE_STATE");
 
-        if(settings.getBoolean("event_sms", false)){
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                filter.addAction(Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION);
-            }
-        }
+        if(settings.getBoolean("event_sms", false)) filter.addAction("android.provider.Telephony.SMS_RECEIVED");
 
         if(settings.getBoolean("event_battery", false)){
             filter.addAction("android.intent.action.BATTERY_LOW");
@@ -199,15 +358,15 @@ public class MainService extends Service {
             filter.addAction(Intent.ACTION_BATTERY_CHANGED);
         }
 
-        br = new MainReceiver();
-        registerReceiver(br, filter);
+        broadcastReceiver = new MainReceiver();
+        registerReceiver(broadcastReceiver, filter);
     }
 
     public void sendNotification(String Ticker, String Title, String Text) {
         String chanelId;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "MainService", NotificationManager.IMPORTANCE_DEFAULT));
+            nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_SERVICE, "WebServerService", NotificationManager.IMPORTANCE_DEFAULT));
             nm.createNotificationChannel(new NotificationChannel(NOTIFICATION_CHANNEL_ID_INFO, "Download Info", NotificationManager.IMPORTANCE_DEFAULT));
             chanelId = NOTIFICATION_CHANNEL_ID_SERVICE;
         } else {
@@ -789,6 +948,8 @@ public class MainService extends Service {
         return post(url,str.toString());
     }
 
+    private boolean post(String url, Map<String, String> m){ return post(url,new JSONObject(m)); }
+
     private boolean post(String url, String key , String value){
         return post(url, "{\"" + key + "\":\"" + value + "\"}");
     }
@@ -888,7 +1049,7 @@ public class MainService extends Service {
                     }
                     if(parms.get("alert") != null){
                         status = OK;
-                        Intent i = new Intent(getApplicationContext(),MainService.class);
+                        Intent i = new Intent(getApplicationContext(),WebServerService.class);
                         for (String key : parms.keySet()) {
                             i.putExtra(key,parms.get(key));
                         }

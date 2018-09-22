@@ -17,21 +17,18 @@ public class MainReceiver extends BroadcastReceiver {
     Context context;
     Intent i;
     SharedPreferences settings;
-    Boolean general_startBoot;
-    Boolean general_startNet;
-    Boolean general_wifi;
-    Boolean general_call;
-    Boolean general_sms;
-    Boolean general_battery;
+    Boolean general_startBoot, general_wifi, event_call, event_sms, event_battery;
+    String connection_list;
 
     @Override
     public void onReceive(Context context, Intent intent) {
         settings = PreferenceManager.getDefaultSharedPreferences(context);
         general_startBoot = settings.getBoolean("general_auto_start", false);
         general_wifi = settings.getBoolean("general_wifi", false);
-        general_call = settings.getBoolean("general_call", false);
-        general_sms = settings.getBoolean("general_sms", false);
-        general_battery = settings.getBoolean("general_battery", false);
+        event_call = settings.getBoolean("event_all", false);
+        event_sms = settings.getBoolean("event_sms", false);
+        connection_list = settings.getString("connection_list", "");
+        event_battery = settings.getBoolean("event_battery", false);
 
         String action = intent.getAction();
         Log.i(TAG, "Action : " + action);
@@ -41,7 +38,12 @@ public class MainReceiver extends BroadcastReceiver {
             return;
         }
 
-        i = new Intent(context, MainService.class);
+        if(connection_list.equals("0")){
+            i = new Intent(context,WebServerService.class);
+
+        }else{
+            i = new Intent(context,MQTTService.class);
+        }
 
         if (general_startBoot && (action.equals("android.intent.action.BOOT_COMPLETED")
                 || action.equals("android.intent.action.QUICKBOOT_POWERON")
@@ -57,7 +59,7 @@ public class MainReceiver extends BroadcastReceiver {
             context.startService(i);
         }
 
-        if (intent.getAction().equals("android.provider.Telephony.SMS_RECEIVED") && general_sms){
+        if (intent.getAction().equals("android.provider.Telephony.SMS_RECEIVED")){
             if ("android.provider.Telephony.SMS_RECEIVED".compareToIgnoreCase(intent.getAction()) == 0) {
                 i.putExtra("init","sms");
                 Object[] pduArray = (Object[]) intent.getExtras().get("pdus");
@@ -75,7 +77,7 @@ public class MainReceiver extends BroadcastReceiver {
             }
         }
 
-        if (intent.getAction().equals("android.intent.action.PHONE_STATE") && general_call) {
+        if (intent.getAction().equals("android.intent.action.PHONE_STATE")) {
             i.putExtra("init","call");
             String phoneState = intent.getStringExtra(TelephonyManager.EXTRA_STATE);
             if (phoneState.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
@@ -101,30 +103,17 @@ public class MainReceiver extends BroadcastReceiver {
                 i.putExtra("init",typeConn);
                 context.startService(i);
             }
-
         }
 
-        if (action.equals("android.intent.action.BATTERY_CHANGED") && general_battery){
+        if (action.equals("android.intent.action.BATTERY_CHANGED")){
             i.putExtras(intent);
             i.putExtra("init","batteryInfo");
             context.startService(i);
         }
 
-        if (action.equals("android.intent.action.BATTERY_LOW") && general_battery){
-            i.putExtra("init","battery");
-            if (action.equals("android.intent.action.BATTERY_LOW")) {
-                i.putExtra("status","low");
-            }
-            context.startService(i);
-        }
-        if ((action.equals("android.intent.action.ACTION_POWER_CONNECTED")
-                ||action.equals("android.intent.action.ACTION_POWER_DISCONNECTED")) && general_battery){
+        if ((action.equals("android.intent.action.ACTION_POWER_CONNECTED") || action.equals("android.intent.action.ACTION_POWER_DISCONNECTED"))){
             i.putExtra("init","power");
-            if (action.equals("android.intent.action.ACTION_POWER_CONNECTED")) {
-                i.putExtra("power","connected");
-            }else{
-                i.putExtra("power","disconnected");
-            }
+            i.putExtra("power",action.equals("android.intent.action.ACTION_POWER_CONNECTED") ? "connected" : "disconnected");
             context.startService(i);
         }
     }

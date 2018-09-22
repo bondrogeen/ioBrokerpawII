@@ -3,12 +3,14 @@ package ru.codedevice.iobrokerpawii;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.util.Log;
@@ -21,25 +23,38 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.WindowManager;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
     String TAG = "MainActivity";
     Intent intentService;
+    SharedPreferences settings;
+    String connection_list;
+
+    boolean isRun;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        intentService = new Intent(this,MainService.class);
+        initSettings();
+
+        if(connection_list.equals("0")){
+            isRun = isMyServiceRunning(WebServerService.class);
+            intentService = new Intent(this,WebServerService.class);
+        }else{
+            isRun = isMyServiceRunning(MQTTService.class);
+            intentService = new Intent(this,MQTTService.class);
+        }
 
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         final FloatingActionButton fab = findViewById(R.id.fab);
-        if (!isMyServiceRunning(MainService.class)) {
+        if (!isRun) {
             fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
             fab.setImageResource(R.drawable.ic_play_arrow_black_24dp);
         }else{
@@ -52,8 +67,17 @@ public class MainActivity extends AppCompatActivity
             public void onClick(View view) {
                 Log.d(TAG,"Click button");
 
-                if(isConnectedInWifi()){
-                    if (!isMyServiceRunning(MainService.class)) {
+                connection_list = settings.getString("connection_list", "");
+
+                if(connection_list.equals("0")){
+                    isRun = isMyServiceRunning(WebServerService.class);
+                }else{
+                    isRun = isMyServiceRunning(MQTTService.class);
+                }
+
+                if((hasConnection().equals("wifi") && connection_list.equals("0"))
+                        || (!hasConnection().equals("false") && connection_list.equals("1")) || isRun){
+                    if (!isRun) {
                         intentService.putExtra("init","start");
                         startService(intentService);
                         fab.setBackgroundTintList(ColorStateList.valueOf(Color.GREEN));
@@ -86,7 +110,31 @@ public class MainActivity extends AppCompatActivity
         intent.putExtra("sensorType", 5);
 //        startActivity(intent);
 
+        noSleep();
+        if(getIntent().getStringExtra("turnOnScreen") != null) setHome();
 
+    }
+
+    private void noSleep(){
+        int flags = WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+        getWindow().addFlags(flags);
+    }
+
+    private boolean setHome() {
+        Intent i = new Intent(Intent.ACTION_MAIN);
+        i.addCategory(Intent.CATEGORY_HOME);
+        i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(i);
+        return true;
+    }
+
+    public void initSettings(){
+        settings = PreferenceManager.getDefaultSharedPreferences(this);
+        connection_list = settings.getString("connection_list", "");
+        Log.i(TAG,connection_list);
     }
 
     @Override
@@ -151,11 +199,18 @@ public class MainActivity extends AppCompatActivity
         return false;
     }
 
-    public boolean isConnectedInWifi() {
-        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        NetworkInfo networkInfo = ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
-        assert wifiManager != null;
-        return networkInfo != null && networkInfo.isAvailable() && networkInfo.isConnected()
-                && wifiManager.isWifiEnabled() && networkInfo.getTypeName().equals("WIFI");
+
+    public String hasConnection()    {
+        ConnectivityManager cm = (ConnectivityManager) getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo wifiInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+        if (wifiInfo != null && wifiInfo.isConnected()){
+            return "wifi";
+        }
+        wifiInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_MOBILE);
+        if (wifiInfo != null && wifiInfo.isConnected()){
+            return "mobile";
+        }
+        return "false";
     }
+
 }

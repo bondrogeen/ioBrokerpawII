@@ -226,11 +226,13 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
                 findPreference("connection_mqtt_ip").setOnPreferenceChangeListener(this);
                 rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_port", "Port", pref.getString("connection_mqtt_port","1883"),false));
                 findPreference("connection_mqtt_port").setOnPreferenceChangeListener(this);
-                rootScreen.addPreference(newEditText(getActivity(),"connection_login_port", "Login", pref.getString("connection_login_port","admin"),false));
-                findPreference("connection_login_port").setOnPreferenceChangeListener(this);
-                rootScreen.addPreference(newEditText(getActivity(),"connection_pass_port", "Password", pref.getString("connection_pass_port","pass"),true));
-                findPreference("connection_pass_port").setOnPreferenceChangeListener(this);
-                findPreference("connection_pass_port").setOnPreferenceClickListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_login", "Login", pref.getString("connection_mqtt_login","admin"),false));
+                findPreference("connection_mqtt_login").setOnPreferenceChangeListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_pass", "Password", pref.getString("connection_mqtt_pass","pass"),true));
+                findPreference("connection_mqtt_pass").setOnPreferenceChangeListener(this);
+                findPreference("connection_mqtt_pass").setOnPreferenceClickListener(this);
+                rootScreen.addPreference(newEditText(getActivity(),"connection_mqtt_device", "Device", pref.getString("connection_mqtt_device",Build.MODEL.replaceAll("\\s+","")),false));
+                findPreference("connection_mqtt_device").setOnPreferenceChangeListener(this);
             }
         }
 
