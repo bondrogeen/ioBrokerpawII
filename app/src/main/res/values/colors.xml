@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#3F51B5</color>
-    <color name="colorPrimaryDark">#303F9F</color>
+    <color name="colorPrimary">#e29702</color>
+    <color name="colorPrimaryDark">#f2a409</color>
     <color name="colorAccent">#4090ff</color>
+
+    <color name="main_bg">#ffffff</color>
+    <color name="item_bg">#f5f5f5</color>
+    <color name="item_text">#3d3d3d</color>
+
+    <color name="toolbar_close_bg">#f2a409</color>
+    <color name="toolbar_open_bg">#f2a409</color>
+    <color name="toolbar_text">#ffffff</color>
+
+    <color name="float_button_bg">#fa8f2b</color>
+    <color name="float_button_title">#ffffff</color>
+
+
 </resources>

@@ -46,17 +46,14 @@
             </intent-filter>
         </activity>
 
-
         <service
             android:name=".WebServerService"
             android:enabled="true"
             android:exported="true" />
-
         <service
             android:name=".MQTTService"
             android:enabled="true"
-            android:exported="true"/>
-
+            android:exported="true" />
         <service android:name="org.eclipse.paho.android.service.MqttService" />
 
         <receiver

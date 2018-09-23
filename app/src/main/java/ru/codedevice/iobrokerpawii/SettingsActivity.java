@@ -270,7 +270,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
         public boolean onPreferenceClick(Preference preference) {
             Log.i("TAG","onClick");
 
-            if(preference instanceof EditTextPreference && preference.getKey().equals("connection_pass_port")){
+            if(preference instanceof EditTextPreference && preference.getKey().equals("connection_mqtt_pass")){
                 EditTextPreference pref=(EditTextPreference)preference;
                 EditText field=pref.getEditText();
                 field.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD);

@@ -268,16 +268,14 @@ public class MQTTService extends Service implements SensorEventListener, MqttCal
 //                sensorValue2.setText("Z: " + event.values[2]);
                 break;
             case 3:
-//                name = "Orientation";
 //                orientationTempValue
                 break;
             case Sensor.TYPE_LIGHT:
-//                name = "Light";
                 lightTempValue = String.valueOf(sensorEvent.values[0]);
                 break;
             case Sensor.TYPE_PROXIMITY:
                 proximityTempValue = String.valueOf(sensorEvent.values[0]);
-                publish("info/sensors/proximity", proximityTempValue);
+                publish("info/sensors/proximity", sensorEvent.values[0] == 0 ? "true" : "false");
                 break;
             case Sensor.TYPE_PRESSURE:
                 pressureTempValue = String.valueOf(sensorEvent.values[0]);
