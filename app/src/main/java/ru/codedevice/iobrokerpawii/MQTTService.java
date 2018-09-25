@@ -217,7 +217,6 @@ public class MQTTService extends Service implements SensorEventListener, MqttCal
     private void initSensors() {
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-//        sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
 
         if(settings.getBoolean("sensors_accelerometer",false)){
             sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
@@ -315,14 +314,8 @@ public class MQTTService extends Service implements SensorEventListener, MqttCal
         mqttLogin = settings.getString("connection_mqtt_login", "");
         mqttPass = settings.getString("connection_mqtt_pass", "");
         mqttDevice = settings.getString("connection_mqtt_device", "");
-
         serverUri = "tcp://" + mqttIP + ":" + mqttPort;
-
         event_battery_full = settings.getString("event_battery_full", "");
-        Log.i(TAG,mqttIP);
-        Log.i(TAG,mqttPort);
-        Log.i(TAG,mqttLogin);
-        Log.i(TAG,mqttPass);
     }
 
     @Override
@@ -348,20 +341,9 @@ public class MQTTService extends Service implements SensorEventListener, MqttCal
 
         IntentFilter filter = new IntentFilter();
 
-        if(settings.getBoolean("event_wifi", false)){
-            filter.addAction("android.net.wifi.STATE_CHANGE");
-//        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
-        }
-
+        if(settings.getBoolean("event_wifi", false))filter.addAction("android.net.wifi.STATE_CHANGE");
         if(settings.getBoolean("event_call", false)) filter.addAction("android.intent.action.PHONE_STATE");
-
-        if(settings.getBoolean("event_display", false)){
-            filter.addAction(Intent.ACTION_SCREEN_ON);
-            filter.addAction(Intent.ACTION_SCREEN_OFF);
-        }
-
         if(settings.getBoolean("event_call", false)) filter.addAction("android.intent.action.PHONE_STATE");
-
         if(settings.getBoolean("event_sms", false)) filter.addAction("android.provider.Telephony.SMS_RECEIVED");
 
         if(settings.getBoolean("event_battery", false)){
@@ -369,6 +351,10 @@ public class MQTTService extends Service implements SensorEventListener, MqttCal
             filter.addAction(Intent.ACTION_POWER_CONNECTED);
             filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
             filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        }
+        if(settings.getBoolean("event_display", false)){
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
         }
 
         broadcastReceiver = new MainReceiver();

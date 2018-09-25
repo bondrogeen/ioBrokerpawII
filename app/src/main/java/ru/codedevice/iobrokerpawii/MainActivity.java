@@ -1,31 +1,18 @@
 package ru.codedevice.iobrokerpawii;
 
+import android.app.ActionBar;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.support.annotation.NonNull;
-import android.support.constraint.ConstraintLayout;
-import android.support.design.widget.CollapsingToolbarLayout;
-import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
-import android.support.v4.view.PagerAdapter;
-import android.support.v4.view.ViewPager;
-import android.support.v7.app.ActionBar;
-import android.support.v7.widget.CardView;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
-import android.util.TypedValue;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
@@ -35,36 +22,38 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-
 import java.util.ArrayList;
-import java.util.Random;
 
-import devlight.io.library.ntb.NavigationTabBar;
-
-public class MainActivity extends AppCompatActivity implements NavigationTabBar.OnTabBarSelectedIndexListener, ViewPager.OnPageChangeListener {
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     String TAG = "MainActivity";
     Intent intentService;
     SharedPreferences settings;
     String connection_list;
     Menu menu;
-
     boolean isRun;
 
-    @Override
+    private RecyclerView mRecyclerView;
+    private RecycleListAdapter mAdapter;
+    private RecyclerView.LayoutManager mLayoutManadger;
+    ArrayList<RecycleItem> mExampleList;
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        createList();
+        buildRecyclerView();
+
+        Toolbar toolbar = findViewById(R.id.toolbar);
+//        setSupportActionBar(toolbar);
+
+        final FloatingActionButton fab = findViewById(R.id.fab);
+
         initSettings();
-        setContentView(R.layout.activity_horizontal_coordinator_ntb);
         noSleep();
         if (getIntent().getStringExtra("turnOnScreen") != null) setHome();
-
 
         if(connection_list.equals("0")){
             Log.i(TAG,"connection_list == 0");
@@ -76,22 +65,63 @@ public class MainActivity extends AppCompatActivity implements NavigationTabBar.
             intentService = new Intent(this,MQTTService.class);
         }
 
-        initUI();
-
-        ImageView settings = findViewById(R.id.toolbar_settings);
-        settings.setOnClickListener(new Button.OnClickListener() {
+        fab.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                startActivity(new Intent(getApplication(), SettingsActivity.class));
+            public void onClick(View view) {
+                Log.d(TAG,"Click button");
+
+                mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Line ", "Line "));
+                mAdapter.notifyItemInserted(2);
+
+
             }
         });
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        drawer.addDrawerListener(toggle);
+        toggle.syncState();
+        NavigationView navigationView = findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(this);
+
+    }
+
+    private void buildRecyclerView() {
+        mRecyclerView = findViewById(R.id.recyclerView);
+        mRecyclerView.setHasFixedSize(true);
+        mLayoutManadger = new LinearLayoutManager(this);
+        mAdapter = new RecycleListAdapter(mExampleList);
+        mRecyclerView.setLayoutManager(mLayoutManadger);
+        mRecyclerView.setAdapter(mAdapter);
+
+        mAdapter.setOnItemClickListener(new RecycleListAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(int position) {
+                mExampleList.get(position).changeText1(",m,m,");
+                mAdapter.notifyItemChanged(position);
+            }
+        });
+    }
+
+
+    public void createList(){
+        mExampleList = new ArrayList<>();
+        mExampleList.add(new RecycleItem(R.drawable.ic_fan,"Line 1", "Line 2"));
+        mExampleList.add(new RecycleItem(R.drawable.ic_light,"Line 3", "Line 4"));
+        mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Line 5", "Line 6"));
 
     }
 
 
     @Override
     public void onBackPressed() {
-        super.onBackPressed();
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+        } else {
+            super.onBackPressed();
+        }
     }
 
     @Override
@@ -104,186 +134,51 @@ public class MainActivity extends AppCompatActivity implements NavigationTabBar.
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_settings) {
-            startActivity(new Intent(this, SettingsActivity.class));
+            Intent intent = new Intent(this, SettingsActivity.class);
+            startActivity(intent);
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    private void initUI() {
-        final ViewPager viewPager = findViewById(R.id.vp_horizontal_ntb);
-        viewPager.setAdapter(new PagerAdapter() {
+    @SuppressWarnings("StatementWithEmptyBody")
+    @Override
+    public boolean onNavigationItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.nav_connection) {
 
-            @Override
-            public int getCount() {
-                return 3;
+            connection_list = settings.getString("connection_list", "");
+            if(connection_list.equals("0")){
+                isRun = isMyServiceRunning(WebServerService.class);
+            }else{
+                isRun = isMyServiceRunning(MQTTService.class);
             }
 
-            @Override
-            public boolean isViewFromObject(final View view, final Object object) {
-                return view.equals(object);
-            }
-
-            @Override
-            public void destroyItem(final View container, final int position, final Object object) {
-                ((ViewPager) container).removeView((View) object);
-            }
-
-            @Override
-            public Object instantiateItem(final ViewGroup container, final int position) {
-                final View view = LayoutInflater.from(
-                        getBaseContext()).inflate(R.layout.item_vp_list, null, false);
-
-                final RecyclerView recyclerView = view.findViewById(R.id.rv);
-                recyclerView.setHasFixedSize(true);
-                recyclerView.setLayoutManager(new LinearLayoutManager(
-                                getBaseContext(), LinearLayoutManager.VERTICAL, false
-                        )
-                );
-                recyclerView.setAdapter(new RecycleAdapter());
-
-                container.addView(view);
-                return view;
-            }
-        });
-
-        final String[] colors = getResources().getStringArray(R.array.default_preview);
-
-        final NavigationTabBar navigationTabBar = findViewById(R.id.ntb_horizontal);
-        final ArrayList<NavigationTabBar.Model> models = new ArrayList<>();
-        models.add(
-                new NavigationTabBar.Model.Builder(
-                        getResources().getDrawable(R.drawable.ic_light),
-                        Color.parseColor(colors[0]))
-                        .title("Heart")
-                        .build()
-        );
-        models.add(
-                new NavigationTabBar.Model.Builder(
-                        getResources().getDrawable(R.drawable.ic_fan),
-                        Color.parseColor(colors[1]))
-                        .title("Cup")
-                        .build()
-        );
-        models.add(
-                new NavigationTabBar.Model.Builder(
-                        getResources().getDrawable(R.drawable.ic_menu_camera),
-                        Color.parseColor(colors[2]))
-                        .title("Diploma")
-                        .build()
-        );
-
-        navigationTabBar.setModels(models);
-        navigationTabBar.setViewPager(viewPager, 2);
-        navigationTabBar.setBehaviorEnabled(true);
-        navigationTabBar.setOnTabBarSelectedIndexListener(this);
-        navigationTabBar.setOnPageChangeListener(this);
-
-        final FloatingActionButton fab = findViewById(R.id.fab);
-
-        Log.i(TAG,"isRun : " + isRun);
-
-        if (!isRun) {
-            fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
-            fab.setImageResource(R.drawable.ic_play_arrow_black_24dp);
-        }else{
-            fab.setBackgroundTintList(ColorStateList.valueOf(Color.GREEN));
-            fab.setImageResource(R.drawable.ic_pause_black_24dp);
-        }
-
-        fab.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(final View v) {
-
-                connection_list = settings.getString("connection_list", "");
-                if(connection_list.equals("0")){
-                    isRun = isMyServiceRunning(WebServerService.class);
+            if((hasConnection().equals("wifi") && connection_list.equals("0"))
+                    || (!hasConnection().equals("false") && connection_list.equals("1")) || isRun){
+                if (!isRun) {
+                    intentService.putExtra("init","start");
+                    startService(intentService);
+                    item.setTitle("Disconnection");
                 }else{
-                    isRun = isMyServiceRunning(MQTTService.class);
+                    stopService(intentService);
+                    item.setTitle("Connection");
                 }
-
-                if((hasConnection().equals("wifi") && connection_list.equals("0"))
-                        || (!hasConnection().equals("false") && connection_list.equals("1")) || isRun){
-                    if (!isRun) {
-                        intentService.putExtra("init","start");
-                        startService(intentService);
-                        fab.setBackgroundTintList(ColorStateList.valueOf(Color.GREEN));
-                        fab.setImageResource(R.drawable.ic_pause_black_24dp);
-                    }else{
-                        stopService(intentService);
-                        fab.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
-                        fab.setImageResource(R.drawable.ic_play_arrow_black_24dp);
-                    }
-                }else{
-                    final Snackbar snackbar = Snackbar.make(navigationTabBar, "Coordinator NTB", Snackbar.LENGTH_SHORT);
-                    snackbar.getView().setBackgroundColor(getResources().getColor(R.color.main_bg));
-                    ((TextView) snackbar.getView().findViewById(R.id.snackbar_text))
-                            .setTextColor(getResources().getColor(R.color.item_text));
-                    snackbar.show();
-                }
+            }else{
+//                final Snackbar snackbar = Snackbar.make(view, "Coordinator NTB", Snackbar.LENGTH_SHORT);
+//                snackbar.getView().setBackgroundColor(getResources().getColor(R.color.main_bg));
+//                ((TextView) snackbar.getView().findViewById(R.id.snackbar_text))
+//                        .setTextColor(getResources().getColor(R.color.item_text));
+//                snackbar.show();
             }
-        });
-
-    }
-
-
-    public class RecycleAdapter extends RecyclerView.Adapter<RecycleAdapter.ViewHolder> {
-
-        @Override
-        public ViewHolder onCreateViewHolder(final ViewGroup parent, final int viewType) {
-            final View view = LayoutInflater.from(getBaseContext()).inflate(R.layout.item_list, parent, false);
-            return new ViewHolder(view);
+        } else if (id == R.id.nav_settings) {
+            startActivity(new Intent(this,SettingsActivity.class));
+        } else if (id == R.id.nav_share) {
+        } else if (id == R.id.nav_send) {
         }
-
-        @Override
-        public void onBindViewHolder(final ViewHolder holder, final int position) {
-            holder.txt.setText(String.format("Navigation Item #%d", position));
-        }
-
-        @Override
-        public int getItemCount() {
-            return 10;
-        }
-
-        public class ViewHolder extends RecyclerView.ViewHolder {
-
-            public TextView txt;
-
-            public ViewHolder(final View itemView) {
-                super(itemView);
-                txt = itemView.findViewById(R.id.txt_vp_item_list);
-            }
-        }
-    }
-
-    @Override
-    public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-
-    }
-
-    @Override
-    public void onPageSelected(int position) {
-
-    }
-
-    @Override
-    public void onPageScrollStateChanged(int state) {
-
-    }
-
-    @Override
-    public void onStartTabSelected(final NavigationTabBar.Model model, final int index) {
-    }
-
-    @Override
-    public void onEndTabSelected(final NavigationTabBar.Model model, final int index) {
-        model.hideBadge();
-    }
-
-    @Override
-    public void onPointerCaptureChanged(boolean hasCapture) {
-
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        drawer.closeDrawer(GravityCompat.START);
+        return true;
     }
 
     private boolean isMyServiceRunning(Class<?> serviceClass) {
@@ -322,6 +217,7 @@ public class MainActivity extends AppCompatActivity implements NavigationTabBar.
         i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(i);
+
         return true;
     }
 
@@ -330,5 +226,4 @@ public class MainActivity extends AppCompatActivity implements NavigationTabBar.
         connection_list = settings.getString("connection_list", "");
         Log.i(TAG, connection_list);
     }
-
 }

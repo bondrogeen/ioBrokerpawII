@@ -110,6 +110,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setupActionBar();
+//        getListView().setBackground(getResources().getDrawable(R.drawable.bg2));
     }
 
     @Override

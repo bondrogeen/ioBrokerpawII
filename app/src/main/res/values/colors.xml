@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#e29702</color>
-    <color name="colorPrimaryDark">#f2a409</color>
+    <color name="colorPrimary">#4090ff</color>
+    <color name="colorPrimaryDark">#004090ff</color>
     <color name="colorAccent">#4090ff</color>
 
     <color name="main_bg">#ffffff</color>
@@ -14,6 +14,7 @@
 
     <color name="float_button_bg">#fa8f2b</color>
     <color name="float_button_title">#ffffff</color>
+    <color name="sensor_color_view">#d2ffffff</color>
 
 
 </resources>

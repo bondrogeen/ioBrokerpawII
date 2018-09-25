@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -55,11 +56,12 @@ public class SensorActivity extends AppCompatActivity implements SensorEventList
 
 
         Log.i(TAG, String.valueOf(sensorType));
-        Toolbar toolbar = findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar_sett);
         toolbar.setTitle(getNameTypeSensors(sensorType));
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
+
         sensorValue0 = findViewById(R.id.sensorValue0);
         sensorValue1 = findViewById(R.id.sensorValue1);
         sensorValue2 = findViewById(R.id.sensorValue2);
