@@ -1,6 +1,5 @@
 package ru.codedevice.iobrokerpawii;
 
-import android.app.ActionBar;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
@@ -10,8 +9,9 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
-import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.support.design.widget.NavigationView;
@@ -23,6 +23,10 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+
+import com.afollestad.materialdialogs.DialogAction;
+import com.afollestad.materialdialogs.MaterialDialog;
+
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
@@ -47,7 +51,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         buildRecyclerView();
 
         Toolbar toolbar = findViewById(R.id.toolbar);
-//        setSupportActionBar(toolbar);
+        toolbar.setTitle("");
+        setSupportActionBar(toolbar);
 
         final FloatingActionButton fab = findViewById(R.id.fab);
 
@@ -70,12 +75,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onClick(View view) {
                 Log.d(TAG,"Click button");
 
-                mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Line ", "Line "));
+                mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Line ", "Line ", "button"));
                 mAdapter.notifyItemInserted(2);
-
 
             }
         });
+
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
 
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -87,30 +92,71 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     }
 
-    private void buildRecyclerView() {
-        mRecyclerView = findViewById(R.id.recyclerView);
-        mRecyclerView.setHasFixedSize(true);
-        mLayoutManadger = new LinearLayoutManager(this);
-        mAdapter = new RecycleListAdapter(mExampleList);
-        mRecyclerView.setLayoutManager(mLayoutManadger);
-        mRecyclerView.setAdapter(mAdapter);
-
-        mAdapter.setOnItemClickListener(new RecycleListAdapter.OnItemClickListener() {
-            @Override
-            public void onItemClick(int position) {
-                mExampleList.get(position).changeText1(",m,m,");
-                mAdapter.notifyItemChanged(position);
-            }
-        });
-    }
-
 
     public void createList(){
         mExampleList = new ArrayList<>();
-        mExampleList.add(new RecycleItem(R.drawable.ic_fan,"Line 1", "Line 2"));
-        mExampleList.add(new RecycleItem(R.drawable.ic_light,"Line 3", "Line 4"));
-        mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Line 5", "Line 6"));
+        mExampleList.add(new RecycleItem(R.drawable.ic_light_on,"Light", "mac/light", "button"));
+        mExampleList.add(new RecycleItem(R.drawable.ic_fan,"Fun", "mac/fun", "button"));
+        mExampleList.add(new RecycleItem(R.drawable.ic_menu_camera,"Camera", "mac/camera", "button"));
 
+    }
+
+    private void buildRecyclerView() {
+        mRecyclerView = findViewById(R.id.recyclerView);
+        mRecyclerView.setHasFixedSize(true);
+//        mLayoutManadger = new LinearLayoutManager(this);
+        Log.i(TAG, String.valueOf(getWidthDp()));
+
+        if(isLandscape()){
+            mLayoutManadger = new GridLayoutManager(this, 2);
+        }else{
+            mLayoutManadger = new GridLayoutManager(this, 1);
+        }
+
+        mAdapter = new RecycleListAdapter(mExampleList);
+
+        mAdapter.setOnItemClickListener(new RecycleListAdapter.OnItemClickListener() {
+            @Override
+            public void onItemSingleClick(int position) {
+                mExampleList.get(position).changeTitle("SingleClick");
+                mAdapter.notifyItemChanged(position);
+                Log.i(TAG,"SingleClick");
+            }
+
+            @Override
+            public void onItemDoubleClick(int position) {
+                mExampleList.get(position).changeTitle("DoubleClick");
+                mAdapter.notifyItemChanged(position);
+                Log.i(TAG,"DoubleClick");
+            }
+
+            @Override
+            public void onItemLongClick(final int position) {
+                new MaterialDialog.Builder(MainActivity.this)
+                        .title("Create dialog")
+                        .content("Content dialog")
+                        .positiveText("Edit")
+                        .negativeText("Delete")
+                        .onPositive(new MaterialDialog.SingleButtonCallback() {
+                            @Override
+                            public void onClick(MaterialDialog dialog, DialogAction which) {
+                                mExampleList.get(position).changeTitle("Long Clicked");
+                                mAdapter.notifyItemChanged(position);
+                            }
+                        })
+                        .onNegative(new MaterialDialog.SingleButtonCallback() {
+                            @Override
+                            public void onClick(MaterialDialog dialog, DialogAction which) {
+                                mExampleList.remove(position);
+                                mAdapter.notifyItemRemoved(position);
+                            }
+                        })
+                        .show();
+            }
+        });
+
+        mRecyclerView.setLayoutManager(mLayoutManadger);
+        mRecyclerView.setAdapter(mAdapter);
     }
 
 
@@ -189,6 +235,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
         return false;
+    }
+
+    private boolean isLandscape(){
+        int width = this.getWindowManager().getDefaultDisplay().getWidth();
+        int height = this.getWindowManager().getDefaultDisplay().getHeight();
+        return width > height;
+    }
+
+    private int getWidthDp(){
+        return (int) (this.getResources().getDisplayMetrics().widthPixels / this.getResources().getDisplayMetrics().density);
     }
 
     public String hasConnection() {

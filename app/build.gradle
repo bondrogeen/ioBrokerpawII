@@ -43,4 +43,6 @@ dependencies {
     implementation 'com.jjoe64:graphview:4.2.2'
     implementation 'devlight.io:navigationtabbar:1.2.5'
 
+    implementation 'com.afollestad.material-dialogs:core:0.9.6.0'
+    implementation 'com.afollestad.material-dialogs:commons:0.9.6.0'
 }

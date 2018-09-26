@@ -1,31 +1,33 @@
 package ru.codedevice.iobrokerpawii;
 
 public class RecycleItem {
-    private int mImageResource;
-    private String mText1;
-    private String mText2;
+    private int mImage;
+    private String mTitle;
+    private String mTopic;
+    private String mType;
 
-    public RecycleItem(int imageResource, String text1, String text2){
-        mImageResource = imageResource;
-        mText1 = text1;
-        mText2 = text2;
+    public RecycleItem(int imageResource, String title, String topic,String type){
+        mImage = imageResource;
+        mTitle = title;
+        mTopic = topic;
+        mType = type;
     }
 
+    public void changeTitle(String title){
+        mTitle = title;
+    }
+    public void changeTopic(String topic) { mTitle = topic; }
+    public void changeType(String type){ mTopic = type; }
 
-    public void changeText1(String text){
-        mText1 = text;
+    public int getImage() {
+        return mImage;
     }
 
-
-    public int getmImageResource() {
-        return mImageResource;
+    public String getTitle(){
+        return mTitle;
     }
-
-    public String getText1(){
-        return mText1;
+    public String getTopic(){
+        return mTopic;
     }
-
-    public String getText2(){
-        return mText2;
-    }
+    public String getType(){ return mTopic; }
 }
